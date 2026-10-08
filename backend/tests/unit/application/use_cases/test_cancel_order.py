@@ -1,6 +1,11 @@
+import pytest
+
 from backend.app.application.authorization.actor import Actor
 from backend.app.application.authorization.authorization_policy import (
     AuthorizationPolicy,
+)
+from backend.app.application.exceptions.authorization_denied import (
+    AuthorizationDenied,
 )
 from backend.app.application.exceptions.entity_not_found import EntityNotFound
 from backend.app.application.use_cases.cancel_order import CancelOrderUseCase
@@ -71,14 +76,11 @@ def test_user_cannot_cancel_order_owned_by_another_user() -> None:
         agent_id="orders_agent",
     )
 
-    try:
+    with pytest.raises(AuthorizationDenied):
         use_case.execute(
             actor=actor,
             order_id=1842,
         )
-        assert False, "Expected PermissionError"
-    except PermissionError:
-        pass
 
     assert repository.orders[1842].status == OrderStatus.PENDING
 
@@ -97,14 +99,11 @@ def test_agent_without_cancel_permission_cannot_cancel_order() -> None:
         agent_id="customer_agent",
     )
 
-    try:
+    with pytest.raises(AuthorizationDenied):
         use_case.execute(
             actor=actor,
             order_id=1842,
         )
-        assert False, "Expected PermissionError"
-    except PermissionError:
-        pass
 
     assert repository.orders[1842].status == OrderStatus.PENDING
 
@@ -117,14 +116,11 @@ def test_missing_order_raises_entity_not_found() -> None:
         agent_id="orders_agent",
     )
 
-    try:
+    with pytest.raises(EntityNotFound):
         use_case.execute(
             actor=actor,
             order_id=9999,
         )
-        assert False, "Expected EntityNotFound"
-    except EntityNotFound:
-        pass
 
 
 def test_shipped_order_cannot_be_cancelled() -> None:
@@ -141,13 +137,11 @@ def test_shipped_order_cannot_be_cancelled() -> None:
         agent_id="orders_agent",
     )
 
-    try:
+    with pytest.raises(BusinessRuleViolation):
         use_case.execute(
             actor=actor,
             order_id=1842,
         )
-        assert False, "Expected BusinessRuleViolation"
-    except BusinessRuleViolation:
-        pass
 
     assert repository.orders[1842].status == OrderStatus.SHIPPED
+

@@ -3,6 +3,9 @@ from backend.app.application.authorization.authorization_policy import (
     AuthorizationPolicy,
 )
 from backend.app.application.authorization.permission import Permission
+from backend.app.application.exceptions.authorization_denied import (
+    AuthorizationDenied,
+)
 from backend.app.application.exceptions.entity_not_found import EntityNotFound
 from backend.app.application.ports.order_repository import OrderRepository
 
@@ -33,7 +36,7 @@ class CancelOrderUseCase:
             permission=Permission.CANCEL_ORDER,
             resource_owner_id=order.customer_id,
         ):
-            raise PermissionError(
+            raise AuthorizationDenied(
                 f"Actor {actor.user_id} is not authorized to cancel "
                 f"order {order.id}."
             )

@@ -15,6 +15,9 @@ env/
 .coverage
 htmlcov/
 
+# Simple Agentic examples
+agent_crash_course.py
+
 # Environment variables
 .env
 .env.*
