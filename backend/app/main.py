@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 
 from agents.exceptions import UserError
-from agents.testing import ScriptedModel, assistant_message, function_call
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -13,6 +12,7 @@ from backend.app.adapters.database.turso_order_repository import (
     TursoOrderRepository,
 )
 from backend.app.adapters.llm.openai.context import OpenAIAgentContext
+from backend.app.adapters.llm.openai.model_factory import create_real_model
 from backend.app.adapters.llm.openai.runtime import OpenAIRuntime
 from backend.app.application.agents.agent_context import AgentContext
 from backend.app.application.authorization.actor import Actor
@@ -54,14 +54,12 @@ async def lifespan(app: FastAPI):
 
         app.state.connection = connection
         app.state.order_repository = repository
-
         yield
     finally:
         connection.close()
 
 
 def create_runtime(
-    order_id: int,
     repository: OrderRepository,
 ) -> OpenAIRuntime:
     use_case = CancelOrderUseCase(
@@ -71,26 +69,9 @@ def create_runtime(
 
     cancel_order_tool = CancelOrderTool(use_case=use_case)
 
-    model = ScriptedModel(
-        [
-            [
-                function_call(
-                    "cancel_order",
-                    {"order_id": order_id},
-                    call_id="call_1",
-                )
-            ],
-            [
-                assistant_message(
-                    "The order has been cancelled successfully."
-                )
-            ],
-        ]
-    )
-
     return OpenAIRuntime(
         cancel_order_tool=cancel_order_tool,
-        model=model,
+        model=create_real_model(),
     )
 
 
@@ -115,10 +96,7 @@ async def cancel_order(
         )
     )
 
-    runtime = create_runtime(
-        order_id=request.order_id,
-        repository=repository,
-    )
+    runtime = create_runtime(repository=repository)
 
     try:
         result = await runtime.run(
