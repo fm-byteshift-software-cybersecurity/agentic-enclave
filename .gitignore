@@ -17,6 +17,7 @@ htmlcov/
 
 # Simple Agentic examples
 agent_crash_course.py
+learning/
 
 # Environment variables
 .env

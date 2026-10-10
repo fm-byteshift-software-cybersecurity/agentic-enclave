@@ -1,6 +1,9 @@
+
 fastapi
 pydantic
 sqlalchemy
 openai-agents
 pytest
 pytest-cov
+python-dotenv
+libsql
