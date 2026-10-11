@@ -1,4 +1,3 @@
-
 fastapi
 pydantic
 sqlalchemy
@@ -7,3 +6,5 @@ pytest
 pytest-cov
 python-dotenv
 libsql
+pwdlib[argon2]
+PyJWT

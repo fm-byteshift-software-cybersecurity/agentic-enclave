@@ -1,9 +1,11 @@
+
 from contextlib import asynccontextmanager
 
 from agents.exceptions import UserError
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from backend.app.adapters.api.auth_router import router as auth_router
 from backend.app.adapters.database.schema import initialize_schema
 from backend.app.adapters.database.turso_connection import (
     create_turso_connection,
@@ -11,9 +13,14 @@ from backend.app.adapters.database.turso_connection import (
 from backend.app.adapters.database.turso_order_repository import (
     TursoOrderRepository,
 )
+from backend.app.adapters.database.turso_user_repository import (
+    TursoUserRepository,
+)
 from backend.app.adapters.llm.openai.context import OpenAIAgentContext
 from backend.app.adapters.llm.openai.model_factory import create_real_model
 from backend.app.adapters.llm.openai.runtime import OpenAIRuntime
+from backend.app.adapters.security.jwt_token_service import JWTTokenService
+from backend.app.adapters.security.password_hasher import PasswordHasher
 from backend.app.application.agents.agent_context import AgentContext
 from backend.app.application.authorization.actor import Actor
 from backend.app.application.authorization.authorization_policy import (
@@ -40,11 +47,15 @@ async def lifespan(app: FastAPI):
     connection = create_turso_connection()
 
     try:
-        repository = TursoOrderRepository(connection)
+        order_repository = TursoOrderRepository(connection)
+        user_repository = TursoUserRepository(connection)
+
+        password_hasher = PasswordHasher()
+        token_service = JWTTokenService()
 
         # Demo data: create the sample order only if it does not exist.
-        if repository.get_by_id(1842) is None:
-            repository.save(
+        if order_repository.get_by_id(1842) is None:
+            order_repository.save(
                 Order(
                     id=1842,
                     customer_id=1,
@@ -53,7 +64,11 @@ async def lifespan(app: FastAPI):
             )
 
         app.state.connection = connection
-        app.state.order_repository = repository
+        app.state.order_repository = order_repository
+        app.state.user_repository = user_repository
+        app.state.password_hasher = password_hasher
+        app.state.token_service = token_service
+
         yield
     finally:
         connection.close()
@@ -79,6 +94,8 @@ app = FastAPI(
     title="AgenticEnclave",
     lifespan=lifespan,
 )
+
+app.include_router(auth_router)
 
 
 @app.post("/api/orders/cancel")
@@ -131,4 +148,3 @@ async def cancel_order(
         "message": result,
         "order_status": order.status.value,
     }
-
