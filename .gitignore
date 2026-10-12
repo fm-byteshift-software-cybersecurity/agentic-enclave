@@ -19,6 +19,9 @@ htmlcov/
 agent_crash_course.py
 learning/
 
+# Commit message file
+commit_msg
+
 # Environment variables
 .env
 .env.*
