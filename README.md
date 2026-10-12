@@ -2,711 +2,158 @@
 
 **Security Engineering for AI Agent Systems**
 
-AgenticEnclave is a security-focused AI agent platform designed to demonstrate, analyze, and mitigate security risks introduced by autonomous and tool-using AI agents.
+AgenticEnclave is a security-focused AI application that demonstrates how vulnerabilities emerge in AI agent systems and how application-level controls can prevent them.
 
-The project combines **software engineering, AI agent architecture, and application security** in a realistic application rather than a collection of isolated security demonstrations.
+It combines software engineering, AI agent architecture, and application security in a realistic application, using paired vulnerable and hardened implementations to demonstrate attack paths, root causes, mitigations, and verification.
 
-A fundamental principle of the project is:
+> An AI agent may request an action. The application must decide whether that action is allowed.
 
-> **An AI agent may request an action. The application must decide whether that action is allowed.**
+The LLM is not a security boundary. Authentication, authorization, and business rules must be enforced by the application independently of model instructions.
 
-The LLM is therefore not treated as a security boundary. Authorization, business rules, least privilege, and security policies remain application-level responsibilities.
+## Project Status
 
----
+**Early development.**
 
-## Project Overview
+The backend foundation and the first security scenario, Broken Object Level Authorization (BOLA), are implemented. The project includes vulnerable and hardened API paths, application-level authorization, and automated security verification.
 
-AgenticEnclave simulates an AI-powered customer support platform composed of multiple specialized agents that interact with application capabilities and business data.
+The frontend and additional security scenarios remain under development.
 
-The platform will include:
+## Architecture
 
-- Customer management
-- Order management
-- Support tickets
-- Multiple specialized AI agents
-- Tool-based agent interactions
-- Agent-specific permissions
-- Centralized authorization and policy enforcement
-- Controlled vulnerable scenarios
-- Hardened implementations
-- Automated security verification
-- Multiple LLM provider support
+AgenticEnclave follows **Hexagonal Architecture (Ports and Adapters)**, applying practical principles from Clean Architecture and Domain-Driven Design.
 
-The application is designed to demonstrate both **professional software architecture** and **security engineering practices for agentic systems**.
+The architecture separates business rules from infrastructure and external services.
 
----
+- **Domain:** Business entities, state transitions, and domain rules.
+- **Application:** Use cases, authorization policies, permissions, and tool definitions.
+- **Ports:** Interfaces that isolate application logic from external implementations.
+- **Primary adapters:** API endpoints that receive external requests.
+- **Secondary adapters:** Database and LLM integrations.
 
-# Architecture
+The backend uses Python, FastAPI, the OpenAI Agents SDK, and Turso/libSQL. LLM integration is implemented through an adapter to keep provider-specific code outside the core business logic.
 
-AgenticEnclave follows a **Hexagonal Architecture (Ports and Adapters)** approach, applying practical principles from Clean Architecture and Domain-Driven Design.
+### Agent Execution and Security Boundaries
 
-The objective is to keep business logic independent from infrastructure and external technologies while allowing the application to evolve without coupling its core to a specific database, LLM provider, API framework, or other external service.
-
-The architecture is organized around:
-
-- Domain
-- Application logic
-- Ports
-- Primary adapters
-- Secondary adapters
-
-External technologies communicate with the application through these boundaries rather than becoming dependencies of the core business logic.
-
-### High-Level Architecture
+An agent interprets a user request and may invoke a tool. The tool delegates the operation to an application use case, where authorization and business rules are enforced before the resource is modified.
 
 ```text
-                         PRIMARY ADAPTERS
-                    ┌────────────────────────┐
-                    │     FastAPI API        │
-                    │     Agent Gateway      │
-                    └───────────┬────────────┘
-                                │
-                                ▼
-              ┌──────────────────────────────────┐
-              │           APPLICATION             │
-              │                                  │
-              │  Agents                          │
-              │  Use Cases                       │
-              │  Authorization Policies          │
-              │  Tool Definitions                │
-              │                                  │
-              └───────────────┬──────────────────┘
-                              │
-                              ▼
-              ┌──────────────────────────────────┐
-              │             DOMAIN               │
-              │                                  │
-              │  Customer                        │
-              │  Order                           │
-              │  Ticket                          │
-              │  Business Rules                  │
-              │                                  │
-              └───────────────┬──────────────────┘
-                              │
-                         PORTS / INTERFACES
-                              │
-               ┌──────────────┴──────────────┐
-               │                             │
-               ▼                             ▼
-      ┌──────────────────┐          ┌──────────────────┐
-      │ DATABASE ADAPTERS │          │   LLM ADAPTERS  │
-      │                  │          │                  │
-      │ Turso            │          │ OpenAI           │
-      │ SQLAlchemy       │          │ Gemini           │
-      │ Repositories     │          │ Groq             │
-      └──────────────────┘          └──────────────────┘
-               SECONDARY ADAPTERS
-```
-
-The arrows above represent application interaction and dependency boundaries. The architectural dependency direction is toward abstractions owned by the core, while external adapters implement those abstractions.
-
-The Domain does not depend on Turso, SQLAlchemy, FastAPI, OpenAI, Gemini, Groq, or other infrastructure technologies.
-
-This separation makes components easier to replace and test independently.
-
----
-
-# Architectural Boundaries
-
-## Domain
-
-The Domain contains the business concepts and rules of the application.
-
-Initial domain concepts include:
-
-- Customer
-- Order
-- Ticket
-- Order cancellation rules
-- Customer data rules
-- Ticket rules
-
-The Domain should not know how data is stored, how an HTTP request arrived, or which LLM provider is being used.
-
----
-
-## Application
-
-The Application layer coordinates the execution of business operations.
-
-It contains:
-
-- Use cases
-- Agents
-- Agent orchestration
-- Authorization policies
-- Permission definitions
-- Tool contracts and definitions
-- Application-level security decisions
-
-The Application layer is responsible for coordinating actions while the Domain remains responsible for core business rules.
-
----
-
-## Ports
-
-Ports define technology-independent interfaces between the application core and external components.
-
-Examples include:
-
-- Customer repository
-- Order repository
-- Ticket repository
-- LLM provider
-- Authorization service
-- Other external services required by the application
-
-Ports allow the application to communicate with external systems without knowing their implementation details.
-
----
-
-## Primary Adapters
-
-Primary adapters are entry points through which external actors interact with the application.
-
-Initial primary adapters include:
-
-- FastAPI REST API
-- Agent Gateway
-
-They translate external requests into application-level operations.
-
----
-
-## Secondary Adapters
-
-Secondary adapters implement ports and connect the application to external systems.
-
-Initial secondary adapters include:
-
-- Turso database adapter
-- SQLAlchemy persistence implementation
-- OpenAI adapter
-- Google Gemini adapter
-- Groq adapter
-
-Changing an external provider should not require redesigning the Domain.
-
----
-
-# AI Agents
-
-An agent is treated as an **Application component**, not as the application's security boundary.
-
-The initial platform will contain three logical agents.
-
-## Customer Agent
-
-Responsible for customer-related operations such as:
-
-- Retrieving customer information
-- Viewing customer profiles
-- Updating permitted customer information
-
-## Orders Agent
-
-Responsible for order-related operations such as:
-
-- Retrieving orders
-- Checking order status
-- Performing permitted order operations
-- Requesting order cancellation where authorized
-
-## Support Agent
-
-Responsible for support-related operations such as:
-
-- Viewing support history
-- Creating support tickets
-- Updating support tickets
-- Retrieving relevant customer and order context
-
-The agents may share the same underlying LLM provider.
-
-The architecture will keep the agent layer independent from the model provider so that providers can be changed without redesigning the application.
-
----
-
-# Agent Execution Model
-
-An agent may interpret a user's request and determine that an application capability should be invoked.
-
-The request then passes through application-level authorization and business logic before execution.
-
-For example:
-
-```text
-User
-  │
-  ▼
+User Request
+     |
+     v
 Orders Agent
-  │
-  │  cancel_order(order_id=1842)
-  ▼
-Tool Request
-  │
-  ▼
-Authorization / Policy
-  │
-  ├── Is the agent allowed?
-  ├── Is the user allowed?
-  ├── Is the resource accessible?
-  └── Is the operation permitted?
-  │
-  ▼
-CancelOrderUseCase
-  │
-  ▼
-Order Repository Port
-  │
-  ▼
-Turso Adapter
+     |
+     v
+Tool Invocation
+     |
+     v
+Application Use Case
+     |
+     v
+Authorization Policy
+     |
+     +---- Denied ----> Reject Operation
+     |
+     v
+Domain Rules
+     |
+     v
+Repository Port
+     |
+     v
+Database Adapter
 ```
 
-The LLM can **request** an operation.
+The model may select an operation and supply its arguments, but it cannot grant itself permission to execute that operation. Security enforcement remains in application-controlled code.
 
-It cannot authorize that operation.
+## Vulnerable and Hardened Implementations
 
-Authorization must be enforced by the application and execution components rather than relying on model instructions or system prompts. Current OWASP guidance for AI agents explicitly recommends least-privilege tool access and authorization enforcement outside the agent's context.
+Security scenarios are implemented as paired paths within the same application architecture.
 
----
+- **Vulnerable path:** Reproduces a specific security weakness in a controlled environment.
+- **Hardened path:** Implements the corresponding security control.
+- **Verification:** Uses automated tests and API-level validation to demonstrate the difference in behavior.
 
-# Security Model
+The goal is to make the vulnerability, root cause, mitigation, and security boundary explicit without duplicating the entire application.
 
-AgenticEnclave uses a least-privilege model.
+## Implemented Security Scenario
 
-Each agent receives only the capabilities required for its intended responsibilities.
+### SEC-01: Broken Object Level Authorization (BOLA)
 
-An initial permission model may resemble:
+BOLA occurs when an application allows a user to access or modify a resource without properly verifying that the user is authorized to perform the requested operation on that specific resource.
 
-```text
-Customer Agent
-  ├── Customer: READ
-  ├── Customer: LIMITED WRITE
-  └── Orders: READ
+In AgenticEnclave, the vulnerable cancellation path omits resource ownership authorization. The hardened path checks the actor's permission against the order owner before allowing cancellation.
 
-Orders Agent
-  ├── Customer: LIMITED READ
-  ├── Orders: READ
-  └── Orders: LIMITED WRITE
+| Component            | Responsibility                                                     |
+| -------------------- | ------------------------------------------------------------------ |
+| Vulnerable use case  | Demonstrates cancellation without resource ownership authorization |
+| Hardened use case    | Enforces authorization before modifying the order                  |
+| Authorization policy | Evaluates whether the actor may perform the requested operation    |
+| Integration tests    | Verify API behavior and security enforcement                       |
 
-Support Agent
-  ├── Customer: LIMITED READ
-  ├── Orders: READ
-  └── Tickets: READ / WRITE
-```
+**Endpoints**
 
-The exact permission matrix will be defined during threat modeling and implementation.
+- Hardened: `POST /api/orders/cancel`
+- Vulnerable: `POST /api/vulnerable/orders/cancel`
 
-Security decisions remain enforced by the application rather than by system prompts or model instructions.
+Both endpoints require authentication. Authentication establishes the caller's identity; it does not automatically authorize access to every resource.
 
----
+The vulnerable endpoint is intentionally insecure and exists exclusively for controlled security demonstrations. It is not intended for production use.
 
-# Vulnerable and Hardened Paths
+## Security Engineering Approach
 
-A central feature of AgenticEnclave is the separation between **controlled vulnerable implementations** and their corresponding **hardened implementations**.
+Each security scenario follows a consistent process:
 
-The project will not maintain two unrelated applications.
+1. Identify the vulnerability and relevant trust boundary.
+2. Reproduce the attack in the vulnerable implementation.
+3. Establish the resulting impact.
+4. Identify the root cause.
+5. Implement the mitigation in the hardened path.
+6. Verify the expected behavior through automated tests and, where appropriate, API-level testing.
 
-Instead, the same application architecture will contain explicit vulnerable and hardened implementations for the security scenarios being demonstrated.
+The threat model evolves alongside the implementation and records relevant assets, actors, entry points, trust boundaries, attack paths, and security controls.
 
-```text
-                    AgenticEnclave
-                         │
-             ┌───────────┴───────────┐
-             │                       │
-             ▼                       ▼
-        Vulnerable                Hardened
-             │                       │
-       Demonstrate              Enforce
-       the failure              the defense
-             │                       │
-             └───────────┬───────────┘
-                         ▼
-                    Verification
-```
+Planned areas of investigation include additional authorization weaknesses, excessive agency, prompt injection, tool abuse, sensitive information disclosure, and unsafe interactions between agents. These areas are not claimed as implemented security scenarios.
 
-## Vulnerable Path
+## Testing
 
-The vulnerable path contains deliberately insecure implementations designed to reproduce realistic security failures in a controlled environment.
+Automated tests verify application behavior and security controls independently of the LLM wherever practical.
 
-Its purpose is to demonstrate:
+Testing covers application logic, API behavior, authorization decisions, and security scenarios. Deterministic test doubles are used where appropriate, while manual API validation can exercise the real agent runtime.
 
-- How the vulnerability occurs
-- How an attacker can reach it
-- What the resulting impact is
-- Which architectural or implementation decision caused the weakness
+A successful model response alone is not considered evidence that an operation is secure. Verification must establish whether the application actually enforced the required security controls.
 
-These implementations are intentionally isolated and are never intended for production use.
+## Technology Stack
 
-## Hardened Path
+| Component       | Technology                    |
+| --------------- | ----------------------------- |
+| Backend API     | Python, FastAPI, Pydantic     |
+| Agent framework | OpenAI Agents SDK             |
+| Persistence     | Turso / libSQL                |
+| Authentication  | JWT                           |
+| Testing         | pytest, FastAPI TestClient    |
+| Frontend        | Planned: React and TypeScript |
 
-The hardened path implements the corresponding security controls.
+The frontend stack may evolve as implementation progresses.
 
-Its purpose is to demonstrate:
+## Responsible Use
 
-- The security boundary
-- The mitigation
-- The correct authorization behavior
-- The architectural change required
-- Automated verification that the attack no longer succeeds
+AgenticEnclave is intended for security education, application security engineering, and authorized testing in controlled environments.
 
-This allows every security scenario to tell a complete engineering story:
+The vulnerable implementations are deliberately insecure and must not be deployed as production services or exposed to untrusted users.
 
-```text
-Vulnerability
-      ↓
-Attack
-      ↓
-Impact
-      ↓
-Root Cause
-      ↓
-Hardened Design
-      ↓
-Verification
-```
+## Development Roadmap
 
-The vulnerable and hardened implementations share the same domain and application concepts wherever practical.
-
-The objective is to make the security difference explicit rather than hiding it behind a global feature flag or duplicating the entire application.
+- **Backend foundation:** Domain model, application use cases, authentication, authorization, persistence, and agent execution.
+- **Security scenarios:** Implement paired vulnerable and hardened paths with automated verification.
+- **Frontend:** Build an interface for demonstrating attacks and mitigations.
+- **Documentation:** Maintain architecture decisions, threat modeling, and technical records for implemented scenarios.
 
 ---
 
-# Security Scenarios
+## Author
 
-The project will investigate both traditional application security vulnerabilities and risks specific to AI agent systems.
+**Fernando Magalhães**  
+CEO – FM ByteShift Software
 
-## Traditional Application Security
-
-Initial scenarios include:
-
-- Broken Object Level Authorization / IDOR
-- Excessive privileges
-- Sensitive data exposure
-- Improper authorization
-- Business logic violations
-
-## AI Agent Security
-
-Initial scenarios include:
-
-- Direct prompt injection
-- Indirect prompt injection
-- Excessive agency
-- Tool abuse
-- Sensitive information disclosure
-- Improper output handling
-
-## Multi-Agent Security
-
-Initial scenarios include:
-
-- Agent boundary violations
-- Privilege escalation between agents
-- Unauthorized tool invocation
-- Excessive trust between agents
-- Unsafe agent-to-agent interactions
-
-Additional scenarios may be introduced when they provide meaningful security value to the architecture.
-
-The objective is not to maximize the number of vulnerabilities.
-
-The objective is to demonstrate realistic attack paths and effective defenses.
-
----
-
-# Vulnerability Demonstration Model
-
-Each security scenario will follow a consistent structure:
-
-```text
-┌─────────────────┐
-│  Vulnerability  │
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│     Attack      │
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│     Impact      │
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│   Root Cause    │
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│    Mitigation   │
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│   Verification  │
-└─────────────────┘
-```
-
-Where appropriate, the vulnerable implementation will be exploited first and the hardened implementation will then be tested against the same attack.
-
----
-
-# Threat Modeling
-
-Security design will be driven by an explicit threat model covering:
-
-- Assets
-- Trust boundaries
-- Actors
-- Entry points
-- Agent capabilities
-- Tool capabilities
-- Data access
-- Authorization decisions
-- Attack paths
-- Security controls
-
-The threat model will be maintained alongside the implementation rather than treated as documentation added after development.
-
----
-
-# Technology Stack
-
-## Frontend
-
-- React
-- TypeScript
-- Vite
-- React Router
-- TanStack React Query
-- Axios
-- Zustand
-- Tailwind CSS
-- shadcn/ui
-- Radix UI
-- Lucide
-- Framer Motion
-
-## Backend
-
-- Python
-- FastAPI
-- Pydantic
-- SQLAlchemy
-
-## AI
-
-The application will use an abstraction layer between the agent architecture and LLM providers.
-
-Initial provider support may include:
-
-- OpenAI
-- Google Gemini
-- Groq
-
-The provider abstraction allows the application to change LLM providers without coupling the core application architecture to a specific vendor.
-
-## Database
-
-- Turso
-- libSQL
-
-The project will use a dedicated Turso database.
-
----
-
-# Project Structure
-
-The project will follow the architectural boundaries established above.
-
-A preliminary structure is:
-
-```text
-agentic-enclave/
-│
-├── backend/
-│   ├── app/
-│   │   ├── domain/
-│   │   │   ├── model/
-│   │   │   ├── services/
-│   │   │   └── exceptions/
-│   │   │
-│   │   ├── application/
-│   │   │   ├── agents/
-│   │   │   ├── use_cases/
-│   │   │   ├── authorization/
-│   │   │   ├── tools/
-│   │   │   └── ports/
-│   │   │
-│   │   ├── entrypoints/
-│   │   │   └── api/
-│   │   │
-│   │   ├── adapters/
-│   │   │   ├── database/
-│   │   │   └── llm/
-│   │   │
-│   │   └── main.py
-│   │
-│   └── tests/
-│       ├── unit/
-│       ├── integration/
-│       ├── security/
-│       │   ├── vulnerable/
-│       │   └── hardened/
-│       └── e2e/
-│
-├── frontend/
-│
-├── docs/
-│   ├── architecture/
-│   ├── security/
-│
-│
-└── README.md
-```
-
-This structure intentionally separates:
-
-- Business logic
-- Application orchestration
-- AI agents
-- Security policies
-- Ports
-- Primary adapters
-- Secondary adapters
-- Security verification
-
-The structure may evolve as implementation decisions are validated.
-
-The architecture favors clear boundaries over creating abstractions that do not provide practical value.
-
----
-
-# Testing
-
-Security controls will be verified through automated tests wherever practical.
-
-Tests will cover areas such as:
-
-- Authorization enforcement
-- Object-level access control
-- Agent permission boundaries
-- Tool authorization
-- Prompt-injection scenarios
-- Unauthorized agent actions
-- Sensitive data access
-- Privilege escalation attempts
-- Business rule enforcement
-
-Testing will be performed at multiple levels:
-
-```text
-Unit Tests
-    ↓
-Integration Tests
-    ↓
-Security Tests
-    ↓
-End-to-End Tests
-```
-
-A successful LLM response will never be considered proof that an operation is secure.
-
-Security tests must verify the application's actual enforcement mechanisms.
-
----
-
-# Project Goals
-
-AgenticEnclave has four primary goals:
-
-1. **Build a realistic AI agent application**
-2. **Demonstrate security failures that can occur in agentic systems**
-3. **Implement application-level defenses against those failures**
-4. **Demonstrate strong software engineering practices throughout the system**
-
-The project is intended to demonstrate the intersection of:
-
-```text
-Software Engineering
-        +
-AI Agents
-        +
-Application Security
-        +
-Security Engineering
-```
-
----
-
-# Development Roadmap
-
-## Phase 1 — Architecture and Foundation
-
-- Define the domain model
-- Define architectural boundaries
-- Define agents and capabilities
-- Define tools
-- Define ports
-- Define permissions
-- Establish the threat model
-- Create the application skeleton
-- Implement the first end-to-end agent flow
-
-## Phase 2 — Agent Platform
-
-- Implement the agent layer
-- Implement LLM provider abstraction
-- Implement tool definitions
-- Implement business logic
-- Connect Turso
-- Implement frontend interface
-
-## Phase 3 — Security Scenarios
-
-- Implement authentication and authorization
-- Define agent permissions
-- Implement centralized policy enforcement
-- Implement controlled vulnerable scenarios
-- Implement attack simulations
-
-## Phase 4 — Hardening
-
-- Implement mitigations
-- Implement hardened paths
-- Add security tests
-- Validate authorization boundaries
-- Verify attack prevention
-
-## Phase 5 — Documentation
-
-- Architecture documentation
-- Threat model
-- Attack walkthroughs
-- Security findings
-- Mitigation analysis
-- Testing methodology
-- Portfolio documentation
-
----
-
-# Responsible Use
-
-AgenticEnclave is intended for security research, education, application security engineering, and authorized testing.
-
-All attack scenarios are designed to run against controlled environments owned or explicitly authorized by the operator.
-
-Do not use the techniques demonstrated by this project against systems without authorization.
-
----
-
-# Status
-
-**Early development**
-
-The architecture, domain model, and security model are being implemented incrementally.
-
-Design decisions may change as the application and threat model are validated.
-
----
-
-Built by **FM ByteShift Software**.
+🌐 [fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)  
+🔐 [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)

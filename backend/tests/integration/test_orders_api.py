@@ -15,7 +15,13 @@ from backend.app.application.exceptions.authorization_denied import (
 )
 from backend.app.application.exceptions.entity_not_found import EntityNotFound
 from backend.app.application.tools.cancel_order_tool import CancelOrderTool
+from backend.app.application.tools.vulnerable_cancel_order_tool import (
+    VulnerableCancelOrderTool,
+)
 from backend.app.application.use_cases.cancel_order import CancelOrderUseCase
+from backend.app.application.use_cases.vulnerable_cancel_order import (
+    VulnerableCancelOrderUseCase,
+)
 from backend.app.domain.exceptions.business_rule_violation import (
     BusinessRuleViolation,
 )
@@ -94,6 +100,39 @@ class FakeRuntime:
         )
 
 
+class FakeVulnerableRuntime:
+    def __init__(
+        self,
+        vulnerable_cancel_order_tool: VulnerableCancelOrderTool,
+    ) -> None:
+        self._vulnerable_cancel_order_tool = vulnerable_cancel_order_tool
+
+    async def run(self, context, user_input: str) -> RuntimeResult:
+        match = re.search(r"\b\d+\b", user_input)
+        if match is None:
+            raise ValueError("No order ID found in user input.")
+
+        order_id = int(match.group())
+
+        try:
+            order = self._vulnerable_cancel_order_tool.execute(
+                context=context.application_context,
+                order_id=order_id,
+            )
+        except (BusinessRuleViolation, EntityNotFound) as exc:
+            raise UserError(str(exc)) from exc
+
+        return RuntimeResult(
+            final_output=f"Order {order.id} cancelled.",
+            tool_results=[
+                {
+                    "order_id": order.id,
+                    "status": order.status.value,
+                }
+            ],
+        )
+
+
 @pytest.fixture
 def client(monkeypatch):
     repository = InMemoryOrderRepository(
@@ -110,7 +149,7 @@ def client(monkeypatch):
             ),
             Order(
                 id=1844,
-                customer_id=1,
+                customer_id=2,
                 status=OrderStatus.PENDING,
             ),
         ]
@@ -125,7 +164,23 @@ def client(monkeypatch):
             cancel_order_tool=CancelOrderTool(use_case=use_case),
         )
 
+    def create_test_vulnerable_runtime(repository):
+        use_case = VulnerableCancelOrderUseCase(
+            order_repository=repository,
+        )
+        return FakeVulnerableRuntime(
+            vulnerable_cancel_order_tool=VulnerableCancelOrderTool(
+                use_case=use_case,
+            ),
+        )
+
     monkeypatch.setattr(main, "create_runtime", create_test_runtime)
+    monkeypatch.setattr(
+        main,
+        "create_vulnerable_runtime",
+        create_test_vulnerable_runtime,
+    )
+
     main.app.state.order_repository = repository
     main.app.state.token_service = FakeTokenService()
     main.app.state.user_repository = FakeUserRepository()
@@ -207,11 +262,44 @@ def test_user_cannot_cancel_another_users_order(
 ) -> None:
     response = client.post(
         "/api/orders/cancel",
-        headers={"Authorization": "Bearer other-user-token"},
+        headers={"Authorization": "Bearer test-token"},
         json={"user_input": "Cancel order 1844"},
     )
 
     assert response.status_code == 403
+    assert (
+        client.app.state.order_repository.get_by_id(1844).status
+        == OrderStatus.PENDING
+    )
+
+
+def test_vulnerable_endpoint_allows_bola_order_cancellation(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/vulnerable/orders/cancel",
+        headers={"Authorization": "Bearer test-token"},
+        json={"user_input": "Cancel order 1844"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["order_id"] == 1844
+    assert response.json()["order_status"] == "cancelled"
+    assert (
+        client.app.state.order_repository.get_by_id(1844).status
+        == OrderStatus.CANCELLED
+    )
+
+
+def test_vulnerable_endpoint_still_requires_authentication(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/vulnerable/orders/cancel",
+        json={"user_input": "Cancel order 1844"},
+    )
+
+    assert response.status_code == 401
     assert (
         client.app.state.order_repository.get_by_id(1844).status
         == OrderStatus.PENDING

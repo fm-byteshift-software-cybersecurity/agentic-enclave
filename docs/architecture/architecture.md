@@ -2,1144 +2,420 @@
 
 ## 1. Purpose
 
-This document defines the software architecture of **AgenticEnclave**, an AI-powered customer support application designed to demonstrate secure engineering practices for AI agent systems.
+This document describes the architectural principles, component boundaries, and security responsibilities of **AgenticEnclave**, an AI-powered application designed to demonstrate security engineering practices for AI agent systems.
 
-The architecture combines:
+The project combines Hexagonal Architecture, application use cases, AI agent execution, and application-level security controls.
 
-- Hexagonal Architecture
-- Ports and Adapters
-- Domain-Driven Design principles
-- Dependency Inversion
-- Application-level authorization
-- AI agent orchestration
-- DevSec development practices
+Its central principle is:
 
-The architecture is intentionally designed to demonstrate that AI agents are **application components**, not the security boundary of the application.
+> An AI agent may request an action. The application must decide whether that action is allowed.
 
-The central architectural principle is:
+The LLM is not a security boundary. Authorization and business rules must be enforced by application-controlled code, independently of model instructions or generated responses.
 
-> **An AI agent may request an action. The application must decide whether that action is allowed.**
+This document distinguishes the architecture currently implemented from capabilities planned for future development.
 
----
+## 2. Architectural Principles
 
-# 2. Architectural Goals
+AgenticEnclave follows a pragmatic combination of:
 
-The architecture has the following goals:
+- **Hexagonal Architecture (Ports and Adapters):** Isolate the application core from external technologies.
+- **Dependency Inversion:** Make infrastructure implementations depend on abstractions owned by the application core.
+- **Domain-Driven Design principles:** Represent business concepts and enforce domain invariants explicitly.
+- **Application use cases:** Coordinate business operations and security-sensitive decisions.
+- **Security by design:** Enforce authorization at application execution boundaries.
+- **Testability:** Verify business behavior and security controls independently of the LLM wherever practical.
 
-### Separation of Concerns
+The architecture favors explicit boundaries over abstractions introduced solely for theoretical purity.
 
-Business rules, application orchestration, security decisions and infrastructure integrations must have clearly defined responsibilities.
+## 3. High-Level Architecture
 
-### Technology Independence
-
-The core application must not depend directly on:
-
-- FastAPI
-- Turso
-- SQLAlchemy
-- OpenAI
-- Gemini
-- Groq
-- React
-- external APIs
-
-Technology-specific implementations belong in adapters.
-
-### Testability
-
-Domain and application logic must be testable without requiring:
-
-- a database
-- an LLM provider
-- an HTTP server
-- external APIs
-
-### Security by Design
-
-Authorization must be enforced by deterministic application code rather than by:
-
-- LLM responses
-- prompts
-- tool descriptions
-- agent instructions
-- frontend state
-
-### Provider Flexibility
-
-The application should be able to support multiple LLM providers without coupling the domain or application logic to a specific provider.
-
-Initial providers:
+The current backend separates HTTP entry points, application behavior, domain rules, and infrastructure integrations.
 
 ```text
-OpenAI
-Google Gemini
-Groq
+                   PRIMARY ADAPTER
+                ┌────────────────────┐
+                │    FastAPI API     │
+                │ Authentication     │
+                │ HTTP Error Mapping │
+                └─────────┬──────────┘
+                          │
+                          ▼
+                APPLICATION CORE
+                ┌────────────────────┐
+                │ Application Context│
+                │ Use Cases          │
+                │ Authorization      │
+                │ Tool Contracts     │
+                │ Repository Ports   │
+                └─────────┬──────────┘
+                          │
+                ┌─────────┴──────────┐
+                ▼                    ▼
+             DOMAIN           SECONDARY ADAPTERS
+        ┌──────────────┐    ┌────────────────────┐
+        │ Order        │    │ OpenAI Agent       │
+        │ OrderStatus  │    │ Runtime / Tools    │
+        │ Business     │    ├────────────────────┤
+        │ Rules        │    │ Turso Repository   │
+        └──────────────┘    └────────────────────┘
 ```
 
-### Controlled Agent Capabilities
+This is a conceptual view, not a complete representation of every class or dependency.
 
-Agents must receive only the tools and permissions required for their intended responsibilities.
+The actual implementation places the OpenAI-specific agent runtime and function-tool integration under `backend/app/adapters/llm/openai/`. The database integration is implemented under `backend/app/adapters/database/`.
 
-This follows the principle of least privilege and OWASP's current guidance for agentic systems.
+The frontend and additional agent capabilities remain outside the current implementation scope.
 
----
+## 4. Dependency Direction
 
-# 3. Architectural Style
+The application core must not depend on concrete infrastructure implementations.
 
-AgenticEnclave uses a pragmatic implementation of:
+The intended dependency relationships are:
 
 ```text
-Hexagonal Architecture
-+
-Ports and Adapters
-+
-DDD Principles
-+
-Application Use Cases
+FastAPI Adapter ──────────┐
+                          ▼
+                    Application
+                          │
+                          ▼
+                        Domain
+
+Turso Adapter ───────► Repository Port
+
+OpenAI Adapter ──────► Application Tool Contract
 ```
 
-Hexagonal Architecture isolates the application/domain core from infrastructure and external interfaces through ports and adapters. This allows databases, APIs and other external technologies to change without forcing changes to the core business logic.
+The arrows represent dependencies on interfaces or components. They do not imply that every component calls every other component directly.
 
-The architecture also follows Dependency Inversion:
+For example, `TursoOrderRepository` implements the `OrderRepository` port consumed by application use cases. The use case does not need to know how Turso stores or retrieves orders.
 
-```text
-Core defines abstractions.
-Adapters implement abstractions.
-```
-
-The domain is therefore independent from infrastructure.
-
----
-
-# 4. High-Level Architecture
+The following dependencies are prohibited by design:
 
 ```text
-                         ┌──────────────────────┐
-                         │       Frontend       │
-                         │ React + TypeScript   │
-                         └──────────┬───────────┘
-                                    │
-                                    │ HTTPS
-                                    ▼
-                         ┌──────────────────────┐
-                         │     FastAPI API      │
-                         │   Primary Adapter     │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                    ┌───────────────────────────────┐
-                    │       Application Core       │
-                    │                               │
-                    │  Agents                       │
-                    │  Use Cases                    │
-                    │  Authorization / Policies     │
-                    │  Tool Definitions             │
-                    └──────────────┬────────────────┘
-                                   │
-                     ┌─────────────┴─────────────┐
-                     │                           │
-                     ▼                           ▼
-             ┌──────────────┐           ┌──────────────┐
-             │    Domain    │           │     Ports    │
-             │              │           │              │
-             │ Entities     │           │ Repositories │
-             │ Value Objects│           │ LLM Provider │
-             │ Rules        │           │ External APIs│
-             └──────┬───────┘           └──────┬───────┘
-                    │                           │
-                    │                           │
-                    │                  ┌────────┴────────┐
-                    │                  │                 │
-                    │                  ▼                 ▼
-                    │             ┌─────────┐      ┌────────────┐
-                    │             │  Turso  │      │ LLM Adapters│
-                    │             └─────────┘      │ OpenAI      │
-                    │                              │ Gemini      │
-                    │                              │ Groq        │
-                    │                              └─────────────┘
-                    │
-                    ▼
-             Domain Behavior
-```
-
-The application core remains independent of the technologies surrounding it.
-
----
-
-# 5. Dependency Direction
-
-The dependency direction is one of the most important architectural rules in the project.
-
-```text
-Entrypoints
-    │
-    ▼
-Application
-    │
-    ▼
-Domain
-```
-
-External implementations depend inward:
-
-```text
-Adapters
-    │
-    ▼
-Ports
-    │
-    ▼
-Application / Domain
-```
-
-The following dependency is prohibited:
-
-```text
-Domain → Turso
-Domain → SQLAlchemy
 Domain → FastAPI
-Domain → OpenAI
-Domain → Gemini
-Domain → Groq
+Domain → Turso
+Domain → OpenAI Agents SDK
+Domain → Provider-specific APIs
 ```
 
-Instead:
+Infrastructure-specific code belongs in adapters. Application and domain code should remain independently testable.
+
+## 5. Architectural Components
+
+### 5.1 Domain
+
+The Domain contains business concepts, state transitions, and business invariants.
+
+The current order-cancellation scenario includes:
+
+- `Order`
+- `OrderStatus`
+- Domain-level cancellation rules
+- `BusinessRuleViolation`
+
+For example, cancelling an order that has already been cancelled is a business-rule violation.
+
+The Domain must not depend on HTTP requests, LLM output, database adapters, or agent execution.
+
+Additional entities and business capabilities may be introduced as the application evolves.
+
+### 5.2 Application
+
+The Application layer coordinates use cases and enforces application-level policies.
+
+Current responsibilities include:
+
+- Executing use cases
+- Evaluating authorization policies
+- Defining permissions and actor context
+- Defining application tool contracts
+- Accessing persistence through repository ports
+
+The implemented cancellation flow includes `CancelOrderUseCase`, `AuthorizationPolicy`, `Actor`, `Permission`, and `OrderRepository`.
+
+Application-level authorization and domain business rules serve different purposes and must remain separate.
+
+### 5.3 Ports
+
+Ports define the interfaces required by application logic.
+
+The current order workflow uses `OrderRepository`, which abstracts order retrieval and persistence.
+
+A port describes what the application needs rather than how an external system implements it.
+
+Additional ports should be introduced when a real application requirement justifies them.
+
+### 5.4 Primary Adapters
+
+Primary adapters provide entry points into application behavior.
+
+The current primary adapter is the FastAPI REST API, implemented through `backend/app/main.py` and the API authentication components.
+
+Its responsibilities include:
+
+- Receiving HTTP requests
+- Establishing the authenticated user context
+- Invoking the appropriate runtime
+- Mapping application failures to HTTP responses
+- Returning serialized results
+
+HTTP handling should not become the sole enforcement point for resource-level authorization. Security-sensitive use cases must enforce the rules required for their operations.
+
+### 5.5 Secondary Adapters
+
+Secondary adapters connect application behavior to external technologies.
+
+The current implementation includes:
+
+- **Turso / libSQL:** Persistence through the database repository adapter.
+- **OpenAI Agents SDK:** Agent execution and function-tool integration.
+
+Provider-specific SDK objects and database implementation details should remain outside the domain.
+
+## 6. AI Agent Execution
+
+Agents are application capabilities orchestrated through an external agent runtime. They are not domain entities and do not constitute a trusted authorization boundary.
+
+The current Orders Agent can request an order-cancellation operation through a registered function tool.
+
+Its execution flow is:
 
 ```text
-Domain / Application
+Authenticated HTTP Request
+            │
+            ▼
+        FastAPI API
+            │
+            ▼
+     OpenAI Agent Runtime
+            │
+            ▼
+      Function Tool Adapter
+            │
+            ▼
+      CancelOrderTool
+            │
+            ▼
+     CancelOrderUseCase
+            │
+            ├── Retrieve Order
+            │
+            ├── Check Authorization
+            │
+            ├── Apply Domain Rules
+            │
+            ▼
+      OrderRepository
+            │
+            ▼
+      Turso Database
+```
+
+The model interprets the request and may generate a tool call containing an `order_id`. The tool adapter passes the arguments to the application tool, which delegates to the use case.
+
+The authenticated actor is derived from the application context established by the API, not from an order ID or identity claimed by the LLM.
+
+The model can request an operation, but the application determines whether it may proceed.
+
+## 7. Authorization Architecture
+
+Authorization is an application-level security responsibility.
+
+The current implementation defines:
+
+- `Actor`: Represents the identity and execution context of the actor.
+- `Permission`: Identifies the requested capability.
+- `AuthorizationPolicy`: Evaluates whether an operation is allowed.
+- `AuthorizationDenied`: Represents a denied authorization decision.
+
+For order cancellation, the use case retrieves the order and checks whether the actor is permitted to cancel an order belonging to the associated customer before modifying its state.
+
+Conceptually:
+
+```text
+Authenticated Actor
         │
         ▼
-       Port
-        ▲
+  Requested Operation
         │
-     Adapter
+        ▼
+    Order Lookup
+        │
+        ▼
+ Authorization Policy
+        │
+        ├── Denied → Reject
+        │
+        ▼
+   Domain Operation
+        │
+        ▼
+   Persist Changes
 ```
 
-This preserves the dependency inversion boundary.
+The lookup occurs before the ownership check because the policy needs the order's owner. The state-changing operation and persistence occur only after authorization succeeds.
 
-AWS's current Hexagonal Architecture guidance similarly defines the domain as the core and recommends that infrastructure implement the ports required by the core.
+Authentication establishes identity; it does not automatically grant access to every resource.
 
----
+Authorization decisions must use trusted application context and resource attributes rather than model-generated claims. Missing or invalid authorization context must not result in permission being granted.
 
-# 6. Architectural Components
+## 8. Tool Architecture
 
-## 6.1 Domain
+Tools expose specific application capabilities to agents.
 
-The Domain represents the business concepts and rules of the application.
+A tool is not equivalent to direct access to a database or an unrestricted application service.
 
-It must remain independent from infrastructure and AI technologies.
+The current cancellation tool delegates to `CancelOrderUseCase`, keeping the operation's authorization and business rules in the application layer.
 
-Responsibilities include:
-
-- entities
-- value objects
-- aggregates where appropriate
-- domain services
-- domain exceptions
-- business invariants
-
-Examples:
-
-```text
-Customer
-Order
-SupportTicket
-OrderStatus
-TicketStatus
-```
-
-Example business rule:
-
-```text
-A shipped order cannot be cancelled.
-```
-
-This rule belongs to the domain.
-
-It must not depend on:
-
-- an LLM
-- an agent
-- FastAPI
-- SQLAlchemy
-- Turso
-
----
-
-# 7. Application
-
-The Application layer coordinates application behavior.
-
-It contains the logic required to execute use cases while remaining independent from concrete infrastructure technologies.
-
-Responsibilities include:
-
-```text
-Use Cases
-Agents
-Agent orchestration
-Authorization
-Permission policies
-Tool definitions
-Application services
-Application ports
-```
-
-Examples:
-
-```text
-GetCustomerProfile
-UpdateCustomerProfile
-GetOrder
-CancelOrder
-CreateSupportTicket
-UpdateSupportTicket
-```
-
-The Application layer is also responsible for coordinating the security boundary between agent requests and business operations.
-
----
-
-# 8. Agents
-
-Agents are application components.
-
-They are **not domain entities**.
-
-They are responsible for:
-
-- interpreting user intent
-- reasoning using an LLM
-- selecting available tools
-- requesting operations
-- coordinating with other agents when explicitly allowed
-
-Agents are not responsible for:
-
-- authorization decisions
-- direct database access
-- enforcing domain invariants
-- deciding resource ownership
-- bypassing application policies
-
-Conceptually:
-
-```text
-Agent
-  │
-  │ requests operation
-  ▼
-Tool
-  │
-  ▼
-Authorization
-  │
-  ▼
-Use Case
-  │
-  ▼
-Domain
-```
-
-The agent therefore acts as an intelligent application component while remaining outside the trusted security boundary.
-
----
-
-# 9. Agent Runtime
-
-Agent execution will use the **OpenAI Agents SDK for Python**.
-
-The SDK provides the runtime capabilities required for:
-
-- agent execution
-- tool calling
-- agent orchestration
-- handoffs
-- model interaction
-- tracing and related runtime functionality
-
-However, the SDK is not considered an architectural boundary.
-
-The architecture must not depend on the assumption that the LLM or agent runtime makes security decisions.
-
-Conceptually:
-
-```text
-Application
-    │
-    ▼
-Agent Runtime
-    │
-    ▼
-LLM
-```
-
-The runtime is therefore replaceable infrastructure from the perspective of the broader application architecture.
-
----
-
-# 10. LLM Provider Abstraction
-
-The application will support multiple LLM providers.
-
-Initial providers:
-
-```text
-OpenAI
-Google Gemini
-Groq
-```
-
-The application will define a provider abstraction rather than embedding provider-specific logic into agents or use cases.
-
-Conceptually:
-
-```text
-                 ┌───────────────┐
-                 │ LLM Provider  │
-                 │     Port      │
-                 └───────┬───────┘
-                         │
-              ┌──────────┼──────────┐
-              ▼          ▼          ▼
-          OpenAI      Gemini       Groq
-          Adapter     Adapter      Adapter
-```
-
-The purpose is not to pretend that every provider exposes identical capabilities.
-
-Provider-specific differences should remain inside their adapters.
-
----
-
-# 11. Ports
-
-Ports define technology-independent interfaces through which the application communicates with external systems.
-
-Examples:
-
-```text
-CustomerRepository
-OrderRepository
-SupportTicketRepository
-LLMProvider
-```
-
-A port defines **what the application needs**, not how the dependency works.
-
-Example:
-
-```text
-OrderRepository
-    ├── get_by_id()
-    ├── save()
-    └── list_for_customer()
-```
-
-The port must not contain Turso-specific or SQLAlchemy-specific concepts.
-
----
-
-# 12. Primary Adapters
-
-Primary adapters are entry points through which external actors interact with the application.
-
-The initial primary adapter is:
-
-```text
-FastAPI REST API
-```
-
-Conceptually:
-
-```text
-HTTP Request
-    ↓
-FastAPI
-    ↓
-Application Use Case
-```
-
-The API adapter is responsible for concerns such as:
-
-- HTTP routing
-- request parsing
-- response serialization
-- HTTP-specific error handling
-- authentication context extraction
-
-Business rules must not be implemented in the HTTP layer.
-
----
-
-# 13. Secondary Adapters
-
-Secondary adapters implement ports and connect the application to external technologies.
-
-Initial adapters include:
-
-```text
-Turso / libSQL
-OpenAI
-Google Gemini
-Groq
-```
-
-Conceptually:
-
-```text
-Application Port
-       ▲
-       │
-       │ implements
-       │
-Secondary Adapter
-       │
-       ▼
-External System
-```
-
-Examples:
-
-```text
-OrderRepository
-      ▲
-      │
-TursoOrderRepository
-      │
-      ▼
-Turso
-```
-
-and:
-
-```text
-LLMProvider
-      ▲
-      │
-OpenAIProvider
-      │
-      ▼
-OpenAI API
-```
-
----
-
-# 14. Authorization Architecture
-
-Authorization is a first-class application concern.
-
-It is not modeled as a generic technical layer between the application and domain.
-
-Instead, authorization is enforced at the appropriate application execution boundaries.
-
-Typical flow:
-
-```text
-Agent
-  │
-  ▼
-Tool Request
-  │
-  ▼
-Authorization Policy
-  │
-  ├── User identity
-  ├── Agent identity
-  ├── Permission
-  ├── Resource
-  └── Operation
-  │
-  ▼
-Use Case
-  │
-  ▼
-Domain
-```
-
-The authorization mechanism must fail closed.
-
-Unknown tools, missing permissions and invalid authorization context must not result in execution.
-
-This follows OWASP guidance to enforce tool authorization outside the agent's context rather than relying on model output or agent instructions.
-
----
-
-# 15. Tool Architecture
-
-Tools represent capabilities exposed to agents.
-
-A tool is not equivalent to direct infrastructure access.
-
-The intended flow is:
+The intended boundary is:
 
 ```text
 Agent
   ↓
-Tool Request
+Tool Adapter
   ↓
-Tool Authorization
+Application Tool
   ↓
 Use Case
-  ↓
-Domain
   ↓
 Repository Port
   ↓
-Adapter
+Database Adapter
 ```
 
-The following pattern is prohibited:
+Tools must not bypass the use cases responsible for the relevant operation.
+
+Three concepts must remain distinct:
+
+- **Tool availability:** The capability is exposed to an agent.
+- **Authorization:** The current actor may perform the operation on the requested resource.
+- **Business validity:** The operation satisfies domain rules.
+
+Availability does not imply authorization, and authorization does not imply that a business operation is valid.
+
+## 9. Business Rules and Authorization
+
+Authorization and domain rules answer different questions.
+
+**Authorization:** Is this actor permitted to perform this operation on this resource?
+
+Example: Is the authenticated customer allowed to cancel this order?
+
+**Domain rule:** Is this operation valid under the business rules?
+
+Example: Is the order in a state that permits cancellation?
+
+The intended sequence is:
 
 ```text
-Agent
-  ↓
-Tool
-  ↓
-Database
-```
-
-Tools must not bypass use cases and domain rules.
-
-Tool availability is also not equivalent to authorization:
-
-```text
-Tool exists
-    ≠
-Agent may use tool
-    ≠
-User is authorized for operation
-```
-
-OWASP recommends per-tool permission scoping and explicit authorization for sensitive operations.
-
----
-
-# 16. Agent-to-Agent Communication
-
-Agent-to-agent communication is treated as an explicit security boundary.
-
-Example:
-
-```text
-Customer Agent
-      │
-      │ request
-      ▼
-Orders Agent
-```
-
-The Orders Agent must not assume that a request is authorized simply because it came from another trusted agent.
-
-The authorization context must remain explicit.
-
-Conceptually:
-
-```text
-User Identity
-+
-Source Agent
-+
-Target Agent
-+
-Requested Capability
-+
-Resource
-+
-Operation
-```
-
-The receiving agent or application boundary must validate the request before execution.
-
-An agent message must never become an implicit privilege grant.
-
----
-
-# 17. Business Rules vs Authorization
-
-The architecture deliberately distinguishes:
-
-### Authorization
-
-Determines:
-
-> "Is this actor allowed to perform this operation on this resource?"
-
-Example:
-
-```text
-Can Customer A cancel Order 1842?
-```
-
-This belongs to application authorization.
-
-### Domain Rule
-
-Determines:
-
-> "Is this operation valid according to the business?"
-
-Example:
-
-```text
-An order that has already shipped cannot be cancelled.
-```
-
-This belongs to the domain.
-
-Therefore:
-
-```text
+Resource Retrieval
+        ↓
 Authorization
-      ↓
-Domain Rule
-      ↓
+        ↓
+Domain Rule Validation
+        ↓
 State Mutation
+        ↓
+Persistence
 ```
 
-Both controls are required.
+Both authorization and domain validation are necessary. Passing one does not replace the other.
 
-Passing authorization does not automatically make an operation valid.
+## 10. Vulnerable and Hardened Implementations
+
+AgenticEnclave uses paired implementations to demonstrate individual security weaknesses and their corresponding mitigations.
+
+The vulnerable implementation intentionally omits a specific control. The hardened implementation enforces that control within the appropriate application boundary.
+
+The current example is **SEC-01: Broken Object Level Authorization (BOLA)**.
+
+The vulnerable cancellation use case retrieves an order and attempts to cancel it without checking whether the actor is authorized to access that order. The hardened use case evaluates the authorization policy before changing the order's state.
+
+The two implementations share the relevant domain model and persistence infrastructure, allowing the security difference to be demonstrated without maintaining two independent applications.
+
+The vulnerable endpoint is intended only for controlled demonstrations and must not be exposed as a production capability.
+
+## 11. Testing Strategy
+
+Security verification is part of the development process rather than a final activity.
+
+The project uses multiple testing levels as appropriate to each component:
+
+- **Unit tests:** Domain behavior, use cases, and authorization policies.
+- **Integration tests:** Interactions among application components, repositories, and API entry points.
+- **Security tests:** Deliberately constructed attacks against vulnerable and hardened paths.
+- **End-to-end tests:** Complete application workflows where required.
+
+Deterministic test doubles can verify application security behavior without relying on nondeterministic LLM responses. Manual API validation can separately exercise the real agent runtime.
+
+A successful model response is not proof of security. Tests must establish whether the application enforced the required controls and whether unauthorized state changes were prevented.
+
+## 12. Technology Stack
+
+The current backend uses:
+
+| Component         | Technology                 |
+| ----------------- | -------------------------- |
+| Language          | Python                     |
+| API framework     | FastAPI                    |
+| Data validation   | Pydantic                   |
+| Agent runtime     | OpenAI Agents SDK          |
+| Database          | Turso / libSQL             |
+| Authentication    | JWT                        |
+| Automated testing | pytest, FastAPI TestClient |
+
+**Planned:** React and TypeScript frontend.
+
+Support for additional LLM providers, including Google Gemini and Groq, may be introduced later. The current OpenAI-specific adapter should not be interpreted as evidence that interchangeable provider adapters are already implemented.
+
+## 13. Architectural Invariants
+
+The following rules guide implementation and code review:
+
+1. **The domain remains independent of infrastructure and agent frameworks.**
+2. **LLM output cannot authorize an operation.**
+3. **Security-sensitive tools delegate to application use cases rather than bypassing them.**
+4. **Resource-level authorization is enforced using trusted identity and resource data.**
+5. **Domain invariants remain enforced independently of the agent runtime.**
+6. **External content and model-generated instructions are treated as untrusted input.**
+7. **Authorization fails closed when the required context or permission is missing or invalid.**
+8. **Security controls must be testable independently of the LLM wherever practical.**
+9. **Vulnerable implementations remain isolated to controlled demonstrations.**
+
+These invariants are architectural requirements. Their compliance must be verified against the implementation as the project evolves.
+
+## 14. Architectural Trade-offs
+
+Hexagonal Architecture introduces additional interfaces, adapters, and indirection compared with a simple CRUD application.
+
+That complexity is justified when it protects meaningful boundaries, such as persistence, LLM integration, authorization, and application use cases.
+
+However, abstractions should not be introduced solely for theoretical completeness. Each abstraction should have a clear responsibility and a practical benefit for testability, change isolation, or security enforcement.
+
+The architecture is intentionally pragmatic and may evolve as new requirements are implemented.
+
+## 15. Evolution
+
+The architecture document will evolve when meaningful implementation decisions change.
+
+Future work may include:
+
+- A frontend for interactive security demonstrations.
+- Additional vulnerable and hardened scenarios.
+- Further agent capabilities and tool boundaries.
+- Additional LLM provider adapters.
+- Broader security and end-to-end verification.
+
+These are potential extensions, not claims that the corresponding capabilities are already implemented.
 
 ---
 
-# 18. Security Boundary
+**Core principle:** AgenticEnclave is designed so that an incorrect or manipulated agent request does not automatically become an authorized application action. Security decisions remain the responsibility of application-controlled code.
 
-The most important security boundary is the transition from an agent-generated request to application execution.
+## Author
 
-```text
-                 UNTRUSTED
-                     │
-                     ▼
-             ┌──────────────┐
-             │     Agent    │
-             │              │
-             │ LLM output   │
-             │ Tool request │
-             └──────┬───────┘
-                    │
-                    │ security boundary
-                    ▼
-          ┌─────────────────────┐
-          │ Authorization       │
-          │ Policy Enforcement  │
-          └──────────┬──────────┘
-                     │
-                     ▼
-                Application
-                     │
-                     ▼
-                  Domain
-```
+**Fernando Magalhães**  
+CEO – FM ByteShift Software
 
-The model may produce an incorrect, malicious or manipulated tool request.
-
-The architecture must remain safe even when that happens.
-
----
-
-# 19. Data Access
-
-Agents must never access the database directly.
-
-The database flow is:
-
-```text
-Agent
-  ↓
-Tool
-  ↓
-Authorization
-  ↓
-Use Case
-  ↓
-Repository Port
-  ↓
-Turso Adapter
-  ↓
-Turso
-```
-
-This provides multiple enforcement points:
-
-```text
-Authorization
-    +
-Use Case
-    +
-Domain Rules
-```
-
-A compromised or manipulated agent therefore cannot simply bypass the application and query the database.
-
----
-
-# 20. Database
-
-The initial persistence layer is:
-
-```text
-Turso / libSQL
-```
-
-Turso is an infrastructure concern.
-
-The domain must not know that Turso exists.
-
-The application communicates with a repository port:
-
-```text
-OrderRepository
-```
-
-and the secondary adapter provides the implementation:
-
-```text
-TursoOrderRepository
-```
-
-This allows the persistence technology to change without changing the domain model.
-
----
-
-# 21. Project Structure
-
-The initial project structure follows the architectural boundaries described above.
-
-```text
-agentic-enclave/
-│
-├── backend/
-│   ├── app/
-│   │   ├── domain/
-│   │   │   ├── model/
-│   │   │   ├── services/
-│   │   │   └── exceptions/
-│   │   │
-│   │   ├── application/
-│   │   │   ├── agents/
-│   │   │   ├── use_cases/
-│   │   │   ├── authorization/
-│   │   │   ├── tools/
-│   │   │   └── ports/
-│   │   │
-│   │   ├── entrypoints/
-│   │   │   └── api/
-│   │   │
-│   │   ├── adapters/
-│   │   │   ├── database/
-│   │   │   └── llm/
-│   │   │
-│   │   └── main.py
-│   │
-│   └── tests/
-│       ├── unit/
-│       ├── integration/
-│       ├── security/
-│       │   ├── vulnerable/
-│       │   └── hardened/
-│       └── e2e/
-│
-├── frontend/
-│
-├── docs/
-│   ├── architecture/
-│   │   └── architecture.md
-│   └── security/
-│       └── threat-model.md
-│
-└── README.md
-```
-
-This structure is intentionally pragmatic.
-
-AWS's current guidance similarly recommends mapping `entrypoints`, `domain`, and `adapters` to the primary architectural boundaries of a hexagonal application.
-
-The structure may evolve during implementation if concrete requirements demonstrate that a different organization provides clearer boundaries.
-
----
-
-# 22. Testing Architecture
-
-Testing is part of the architecture rather than a final development stage.
-
-The project will use multiple levels of testing.
-
-## Unit Tests
-
-Focused on:
-
-- domain behavior
-- application services
-- authorization policies
-- individual components
-
-These tests should not require external services.
-
-## Integration Tests
-
-Focused on:
-
-- repository adapters
-- LLM adapters
-- database integration
-- application component integration
-
-## Security Tests
-
-Focused specifically on attack scenarios defined in the threat model.
-
-Examples:
-
-```text
-BOLA
-Prompt Injection
-Tool Misuse
-Privilege Escalation
-Sensitive Information Disclosure
-Business Logic Abuse
-```
-
-## End-to-End Tests
-
-Validate complete application flows through primary adapters.
-
----
-
-# 23. DevSec Development Model
-
-Security is integrated into feature development.
-
-For a security-sensitive capability, the development flow is:
-
-```text
-Threat Model
-      ↓
-Security Requirement
-      ↓
-Domain / Application Design
-      ↓
-Implementation
-      ↓
-Unit Tests
-      ↓
-Security Test
-      ↓
-Hardening
-      ↓
-Regression Test
-```
-
-Security testing is therefore performed continuously rather than postponed until the end of development.
-
-AWS recommends testing from the beginning of development and integrating automated testing into the development lifecycle.
-
----
-
-# 24. Vulnerable and Hardened Implementations
-
-AgenticEnclave intentionally includes controlled vulnerable implementations.
-
-These implementations exist only to demonstrate security failures in a controlled environment.
-
-The application is not duplicated into two independent architectures.
-
-Instead, individual security scenarios may provide:
-
-```text
-Vulnerable implementation
-        +
-Hardened implementation
-        +
-Attack test
-        +
-Regression test
-```
-
-The purpose is to demonstrate:
-
-```text
-Vulnerability
-      ↓
-Attack
-      ↓
-Impact
-      ↓
-Root Cause
-      ↓
-Mitigation
-      ↓
-Verification
-```
-
-The vulnerable path must never become an accidental production path.
-
----
-
-# 25. Architectural Security Invariants
-
-The following invariants must remain true throughout development.
-
-### Invariant 1
-
-**Agents cannot directly access infrastructure.**
-
-```text
-Agent → Database
-```
-
-is prohibited.
-
-### Invariant 2
-
-**LLM output cannot authorize an operation.**
-
-```text
-LLM says "allowed"
-```
-
-is never sufficient authorization.
-
-### Invariant 3
-
-**Tools cannot bypass application use cases.**
-
-```text
-Tool → Database
-```
-
-is prohibited.
-
-### Invariant 4
-
-**Domain rules cannot depend on agents.**
-
-The domain must remain valid even if agents are removed from the system.
-
-### Invariant 5
-
-**Agent-to-agent communication does not automatically grant privileges.**
-
-### Invariant 6
-
-**External content is untrusted.**
-
-Documents, messages, API responses and other external content must not be treated as trusted instructions.
-
-### Invariant 7
-
-**Authorization fails closed.**
-
-Unknown or incomplete authorization context results in rejection.
-
-### Invariant 8
-
-**Security controls must be testable independently from the LLM.**
-
-A security test must be able to demonstrate that authorization remains effective even when the agent produces an adversarial request.
-
----
-
-# 26. Architectural Trade-offs
-
-Hexagonal Architecture introduces additional abstractions and components.
-
-Examples include:
-
-```text
-Ports
-Adapters
-Use Cases
-Authorization Policies
-Tool Definitions
-```
-
-This increases the amount of code compared with a simple layered CRUD application.
-
-The additional structure is intentional because AgenticEnclave has multiple external dependencies and security boundaries:
-
-```text
-LLM providers
-Database
-HTTP API
-AI agents
-Agent tools
-External content
-```
-
-The architecture therefore benefits from explicit boundaries and replaceable adapters.
-
-However, abstractions should not be introduced merely for theoretical purity.
-
-If an abstraction does not protect a meaningful architectural boundary, it should be reconsidered.
-
-AWS explicitly notes that Ports and Adapters can introduce maintenance complexity and should be used where the resulting decoupling provides meaningful value.
-
----
-
-# 27. Architectural Decision Summary
-
-| Decision                | Choice                                   | Reason                                       |
-| ----------------------- | ---------------------------------------- | -------------------------------------------- |
-| Architectural style     | Hexagonal / Ports and Adapters           | Decoupling and testability                   |
-| Domain approach         | Pragmatic DDD                            | Explicit business rules and invariants       |
-| API                     | FastAPI                                  | Python application entrypoint                |
-| Agent runtime           | OpenAI Agents SDK                        | Agent execution and orchestration            |
-| LLM abstraction         | Application-defined provider abstraction | Avoid provider lock-in                       |
-| Initial providers       | OpenAI, Gemini, Groq                     | Provider flexibility                         |
-| Database                | Turso / libSQL                           | Cloud database with simple operational model |
-| Persistence abstraction | Repository ports                         | Infrastructure isolation                     |
-| Authorization           | Application-level policies               | Trusted security boundary                    |
-| Tools                   | Application capabilities                 | Controlled agent actions                     |
-| Frontend                | React + TypeScript                       | Application UI                               |
-| Security methodology    | DevSec                                   | Security integrated into development         |
-| Security testing        | Dedicated security scenarios             | Repeatable attack verification               |
-| Deployment model        | Deferred                                 | Avoid premature infrastructure complexity    |
-
----
-
-# 28. Core Architectural Principle
-
-AgenticEnclave is built around a simple separation of responsibilities:
-
-```text
-LLM
-  ↓
-Reasons
-
-Agent
-  ↓
-Requests
-
-Tool
-  ↓
-Describes Capability
-
-Authorization
-  ↓
-Decides Permission
-
-Use Case
-  ↓
-Coordinates Operation
-
-Domain
-  ↓
-Enforces Business Rules
-
-Port
-  ↓
-Defines External Dependency
-
-Adapter
-  ↓
-Implements Technology Integration
-
-Infrastructure
-  ↓
-Executes
-```
-
-The system is therefore designed so that an incorrect or malicious agent decision does not automatically become an authorized application action.
-
-That separation is the central architectural and security property of AgenticEnclave.
+🌐 [fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)  
+🔐 [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)

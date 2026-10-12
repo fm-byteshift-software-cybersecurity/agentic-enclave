@@ -23,6 +23,9 @@ from backend.app.adapters.database.turso_user_repository import (
 from backend.app.adapters.llm.openai.context import OpenAIAgentContext
 from backend.app.adapters.llm.openai.model_factory import create_real_model
 from backend.app.adapters.llm.openai.runtime import OpenAIRuntime
+from backend.app.adapters.llm.openai.vulnerable_runtime import (
+    VulnerableOpenAIRuntime,
+)
 from backend.app.adapters.security.jwt_token_service import JWTTokenService
 from backend.app.adapters.security.password_hasher import PasswordHasher
 from backend.app.application.agents.agent_context import AgentContext
@@ -36,7 +39,13 @@ from backend.app.application.exceptions.authorization_denied import (
 from backend.app.application.exceptions.entity_not_found import EntityNotFound
 from backend.app.application.ports.order_repository import OrderRepository
 from backend.app.application.tools.cancel_order_tool import CancelOrderTool
+from backend.app.application.tools.vulnerable_cancel_order_tool import (
+    VulnerableCancelOrderTool,
+)
 from backend.app.application.use_cases.cancel_order import CancelOrderUseCase
+from backend.app.application.use_cases.vulnerable_cancel_order import (
+    VulnerableCancelOrderUseCase,
+)
 from backend.app.domain.exceptions.business_rule_violation import (
     BusinessRuleViolation,
 )
@@ -59,8 +68,8 @@ async def lifespan(app: FastAPI):
 
         password_hasher = PasswordHasher()
         token_service = JWTTokenService()
-
-        # Demo data: create the sample order only if it does not exist.
+        
+        # Demo data: create sample orders only if they do not exist.
         if order_repository.get_by_id(1842) is None:
             order_repository.save(
                 Order(
@@ -69,6 +78,17 @@ async def lifespan(app: FastAPI):
                     status=OrderStatus.PENDING,
                 )
             )
+
+        # BOLA demonstration: order 1844 belongs to user 2.
+        if order_repository.get_by_id(1844) is None:
+            order_repository.save(
+                Order(
+                    id=1844,
+                    customer_id=2,
+                    status=OrderStatus.PENDING,
+                )
+            )
+
 
         app.state.connection = connection
         app.state.order_repository = order_repository
@@ -86,11 +106,26 @@ def create_runtime(repository: OrderRepository) -> OpenAIRuntime:
         order_repository=repository,
         authorization_policy=AuthorizationPolicy(),
     )
-
     cancel_order_tool = CancelOrderTool(use_case=use_case)
 
     return OpenAIRuntime(
         cancel_order_tool=cancel_order_tool,
+        model=create_real_model(),
+    )
+
+
+def create_vulnerable_runtime(
+    repository: OrderRepository,
+) -> VulnerableOpenAIRuntime:
+    use_case = VulnerableCancelOrderUseCase(
+        order_repository=repository,
+    )
+    vulnerable_cancel_order_tool = VulnerableCancelOrderTool(
+        use_case=use_case,
+    )
+
+    return VulnerableOpenAIRuntime(
+        vulnerable_cancel_order_tool=vulnerable_cancel_order_tool,
         model=create_real_model(),
     )
 
@@ -103,13 +138,11 @@ app = FastAPI(
 app.include_router(auth_router)
 
 
-@app.post("/api/orders/cancel")
-async def cancel_order(
+async def execute_cancellation(
     request: CancelOrderRequest,
-    user: Annotated[User, Depends(get_authenticated_user)],
+    user: User,
+    runtime: OpenAIRuntime | VulnerableOpenAIRuntime,
 ) -> dict[str, str | int]:
-    repository = app.state.order_repository
-
     context = OpenAIAgentContext(
         application_context=AgentContext(
             actor=Actor(
@@ -118,8 +151,6 @@ async def cancel_order(
             )
         )
     )
-
-    runtime = create_runtime(repository=repository)
 
     try:
         result = await runtime.run(
@@ -174,3 +205,35 @@ async def cancel_order(
         "order_id": order_id,
         "order_status": order_status,
     }
+
+
+@app.post("/api/orders/cancel")
+async def cancel_order(
+    request: CancelOrderRequest,
+    user: Annotated[User, Depends(get_authenticated_user)],
+) -> dict[str, str | int]:
+    runtime = create_runtime(
+        repository=app.state.order_repository,
+    )
+
+    return await execute_cancellation(
+        request=request,
+        user=user,
+        runtime=runtime,
+    )
+
+
+@app.post("/api/vulnerable/orders/cancel")
+async def cancel_order_vulnerable(
+    request: CancelOrderRequest,
+    user: Annotated[User, Depends(get_authenticated_user)],
+) -> dict[str, str | int]:
+    runtime = create_vulnerable_runtime(
+        repository=app.state.order_repository,
+    )
+
+    return await execute_cancellation(
+        request=request,
+        user=user,
+        runtime=runtime,
+    )
