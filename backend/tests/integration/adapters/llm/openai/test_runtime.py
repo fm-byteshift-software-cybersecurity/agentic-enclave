@@ -93,7 +93,10 @@ async def test_orders_agent_executes_authorized_tool_call() -> None:
         user_input="Please cancel order 1842.",
     )
 
-    assert result == "The order has been cancelled successfully."
+    assert result.final_output == "The order has been cancelled successfully."
+    assert result.tool_results == [
+        {"order_id": 1842, "status": "cancelled"}
+    ]
     assert repository.orders[1842].status == OrderStatus.CANCELLED
 
     assert len(model.calls) == 2

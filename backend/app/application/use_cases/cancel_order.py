@@ -8,6 +8,7 @@ from backend.app.application.exceptions.authorization_denied import (
 )
 from backend.app.application.exceptions.entity_not_found import EntityNotFound
 from backend.app.application.ports.order_repository import OrderRepository
+from backend.app.domain.model.order import Order
 
 
 class CancelOrderUseCase:
@@ -23,7 +24,7 @@ class CancelOrderUseCase:
         self,
         actor: Actor,
         order_id: int,
-    ) -> None:
+    ) -> Order:
         order = self._order_repository.get_by_id(order_id)
 
         if order is None:
@@ -42,5 +43,6 @@ class CancelOrderUseCase:
             )
 
         order.cancel()
-
         self._order_repository.save(order)
+
+        return order

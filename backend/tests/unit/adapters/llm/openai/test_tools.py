@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from agents.tool_context import ToolContext
@@ -31,10 +33,7 @@ class InMemoryOrderRepository(OrderRepository):
 
 def create_function_tool(
     orders: list[Order],
-) -> tuple[
-    object,
-    InMemoryOrderRepository,
-]:
+) -> tuple[object, InMemoryOrderRepository]:
     repository = InMemoryOrderRepository(orders)
 
     use_case = CancelOrderUseCase(
@@ -42,9 +41,7 @@ def create_function_tool(
         authorization_policy=AuthorizationPolicy(),
     )
 
-    application_tool = CancelOrderTool(
-        use_case=use_case,
-    )
+    application_tool = CancelOrderTool(use_case=use_case)
 
     function_tool = create_openai_function_tool(
         tool=application_tool,
@@ -96,7 +93,10 @@ async def test_openai_tool_passes_application_context_to_application_tool() -> N
         '{"order_id": 1842}',
     )
 
-    assert result == "Tool execution completed successfully."
+    assert json.loads(result) == {
+        "order_id": 1842,
+        "status": "cancelled",
+    }
     assert repository.orders[1842].status == OrderStatus.CANCELLED
 
 

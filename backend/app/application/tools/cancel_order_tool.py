@@ -3,6 +3,7 @@ from typing import Any
 from backend.app.application.agents.agent_context import AgentContext
 from backend.app.application.tools.tool import Tool
 from backend.app.application.use_cases.cancel_order import CancelOrderUseCase
+from backend.app.domain.model.order import Order
 
 
 class CancelOrderTool(Tool):
@@ -25,8 +26,8 @@ class CancelOrderTool(Tool):
         context: AgentContext,
         *,
         order_id: int,
-    ) -> None:
-        self._use_case.execute(
+    ) -> Order:
+        return self._use_case.execute(
             actor=context.actor,
             order_id=order_id,
         )

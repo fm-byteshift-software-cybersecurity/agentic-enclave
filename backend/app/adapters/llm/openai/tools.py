@@ -5,6 +5,7 @@ from agents import FunctionTool
 from agents.tool_context import ToolContext
 
 from backend.app.application.tools.tool import Tool
+from backend.app.domain.model.order import Order
 
 
 def create_openai_function_tool(
@@ -24,6 +25,14 @@ def create_openai_function_tool(
 
         if result is None:
             return "Tool execution completed successfully."
+
+        if isinstance(result, Order):
+            return json.dumps(
+                {
+                    "order_id": result.id,
+                    "status": result.status.value,
+                }
+            )
 
         return str(result)
 
