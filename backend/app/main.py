@@ -1,9 +1,10 @@
-
+import os
 from contextlib import asynccontextmanager
 from typing import Annotated
 
 from agents.exceptions import UserError
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.app.adapters.api.auth_dependencies import (
@@ -68,7 +69,7 @@ async def lifespan(app: FastAPI):
 
         password_hasher = PasswordHasher()
         token_service = JWTTokenService()
-        
+
         # Demo data: create sample orders only if they do not exist.
         if order_repository.get_by_id(1842) is None:
             order_repository.save(
@@ -88,7 +89,6 @@ async def lifespan(app: FastAPI):
                     status=OrderStatus.PENDING,
                 )
             )
-
 
         app.state.connection = connection
         app.state.order_repository = order_repository
@@ -133,6 +133,47 @@ def create_vulnerable_runtime(
 app = FastAPI(
     title="AgenticEnclave",
     lifespan=lifespan,
+)
+
+cors_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+
+trusted_origins = set(cors_origins)
+
+
+
+@app.middleware("http")
+async def validate_request_origin(
+    request: Request,
+    call_next,
+):
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        origin = request.headers.get("origin")
+
+        if origin is None or origin.rstrip("/") not in trusted_origins:
+            from starlette.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Request origin is not allowed."},
+            )
+
+    return await call_next(request)
+
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
 
 app.include_router(auth_router)

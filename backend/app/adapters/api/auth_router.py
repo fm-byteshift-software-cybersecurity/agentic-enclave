@@ -1,5 +1,6 @@
+import os
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from backend.app.adapters.api.auth_schemas import (
     AuthResponse,
@@ -18,6 +19,23 @@ from backend.app.application.use_cases.register_user import (
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
+ACCESS_TOKEN_COOKIE = "access_token"
+ACCESS_TOKEN_MAX_AGE = 30 * 60
+
+
+def _set_access_token_cookie(response: Response, token: str) -> None:
+    is_production = os.getenv("APP_ENV", "development").lower() == "production"
+
+    response.set_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        value=token,
+        max_age=ACCESS_TOKEN_MAX_AGE,
+        httponly=True,
+        secure=is_production,
+        samesite="none" if is_production else "lax",
+        path="/",
+    )
+
 
 @router.post(
     "/register",
@@ -27,6 +45,7 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 def register(
     payload: RegisterUserRequest,
     request: Request,
+    response: Response,
 ) -> AuthResponse:
     use_case = RegisterUserUseCase(
         user_repository=request.app.state.user_repository,
@@ -45,10 +64,11 @@ def register(
             detail="An account with this email already exists.",
         ) from exc
 
+    _set_access_token_cookie(response, result.access_token)
+
     return AuthResponse(
         user_id=result.user_id,
         email=result.email,
-        access_token=result.access_token,
     )
 
 
@@ -56,6 +76,7 @@ def register(
 def login(
     payload: LoginUserRequest,
     request: Request,
+    response: Response,
 ) -> AuthResponse:
     use_case = LoginUserUseCase(
         user_repository=request.app.state.user_repository,
@@ -72,11 +93,28 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+
+    _set_access_token_cookie(response, result.access_token)
 
     return AuthResponse(
         user_id=result.user_id,
         email=result.email,
-        access_token=result.access_token,
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response) -> Response:
+    response.delete_cookie(
+        key=ACCESS_TOKEN_COOKIE,
+        path="/",
+        httponly=True,
+        secure=os.getenv("APP_ENV", "development").lower() == "production",
+        samesite=(
+            "none"
+            if os.getenv("APP_ENV", "development").lower() == "production"
+            else "lax"
+        ),
+    )
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response

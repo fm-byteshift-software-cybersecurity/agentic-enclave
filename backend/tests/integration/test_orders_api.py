@@ -186,7 +186,10 @@ def client(monkeypatch):
     main.app.state.user_repository = FakeUserRepository()
 
     # Não executar o lifespan: ele inicializa a conexão com o Turso.
-    test_client = TestClient(main.app)
+    test_client = TestClient(
+    main.app,
+    headers={"Origin": "http://localhost:5173"},
+    )
     yield test_client
     test_client.close()
 
@@ -304,3 +307,42 @@ def test_vulnerable_endpoint_still_requires_authentication(
         client.app.state.order_repository.get_by_id(1844).status
         == OrderStatus.PENDING
     )
+
+
+def test_cancel_order_rejects_request_without_origin(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/orders/cancel",
+        headers={"Origin": ""},
+        json={"user_input": "Cancel order 1842"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Request origin is not allowed."
+
+
+def test_cancel_order_rejects_untrusted_origin(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/orders/cancel",
+        headers={"Origin": "https://attacker.example"},
+        json={"user_input": "Cancel order 1842"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Request origin is not allowed."
+
+
+def test_cancel_order_with_trusted_origin_reaches_authentication(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/orders/cancel",
+        headers={"Origin": "http://localhost:5173"},
+        json={"user_input": "Cancel order 1842"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"

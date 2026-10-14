@@ -1,6 +1,3 @@
-
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
@@ -25,5 +22,3 @@ class LoginUserRequest(BaseModel):
 class AuthResponse(BaseModel):
     user_id: int
     email: str
-    access_token: str
-    token_type: Literal["bearer"] = "bearer"

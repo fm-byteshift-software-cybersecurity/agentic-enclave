@@ -6,6 +6,14 @@ import {
   Check,
   ShieldCheck,
 } from "lucide-react";
+import { apiPost, ApiError } from "@/lib/api";
+
+
+interface RegisterResponse {
+  user_id: number;
+  email: string;
+}
+
 
 function Brand() {
   return (
@@ -21,23 +29,60 @@ function Brand() {
 }
 
 export default function SignUp() {
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setMessage("");
+    setIsSuccess(false);
 
     if (password !== confirmPassword) {
       setMessage("Passwords do not match.");
       return;
     }
 
-    setMessage(
-      "Account creation is not implemented yet. This form is a UI preview.",
-    );
+    setIsSubmitting(true);
+
+    try {
+      const result = await apiPost<RegisterResponse>(
+        "/api/auth/register",
+        {
+          email: email.trim(),
+          password,
+        },
+      );
+
+      setIsSuccess(true);
+      setMessage(
+        `Account created successfully for ${result.email}. You can now sign in.`,
+      );
+      setEmail(result.email);
+      setPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          setMessage(
+            "An account with this email already exists. Try signing in instead.",
+          );
+        } else if (error.status === 422) {
+          setMessage(
+            "The email or password does not meet the requirements. Use a valid email and a password between 12 and 128 characters.",
+          );
+        } else {
+          setMessage(error.message);
+        }
+      } else {
+        setMessage("Unable to create your account. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -85,30 +130,6 @@ export default function SignUp() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label
-                  htmlFor="name"
-                  className="mb-2 block text-sm font-medium text-slate-200"
-                >
-                  Full name
-                </label>
-
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  autoComplete="name"
-                  placeholder="Your name"
-                  required
-                  value={name}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    setMessage("");
-                  }}
-                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10"
-                />
-              </div>
-
-              <div>
-                <label
                   htmlFor="email"
                   className="mb-2 block text-sm font-medium text-slate-200"
                 >
@@ -122,12 +143,14 @@ export default function SignUp() {
                   autoComplete="email"
                   placeholder="you@company.com"
                   required
+                  maxLength={254}
                   value={email}
+                  disabled={isSubmitting || isSuccess}
                   onChange={(event) => {
                     setEmail(event.target.value);
                     setMessage("");
                   }}
-                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10"
+                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10 disabled:opacity-60"
                 />
               </div>
 
@@ -145,18 +168,20 @@ export default function SignUp() {
                   type="password"
                   autoComplete="new-password"
                   placeholder="Create a password"
-                  minLength={8}
+                  minLength={12}
+                  maxLength={128}
                   required
                   value={password}
+                  disabled={isSubmitting || isSuccess}
                   onChange={(event) => {
                     setPassword(event.target.value);
                     setMessage("");
                   }}
-                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10"
+                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10 disabled:opacity-60"
                 />
 
                 <p className="mt-1.5 text-xs text-slate-600">
-                  Use at least 8 characters.
+                  Use 12–128 characters.
                 </p>
               </div>
 
@@ -174,14 +199,16 @@ export default function SignUp() {
                   type="password"
                   autoComplete="new-password"
                   placeholder="Re-enter your password"
-                  minLength={8}
+                  minLength={12}
+                  maxLength={128}
                   required
                   value={confirmPassword}
+                  disabled={isSubmitting || isSuccess}
                   onChange={(event) => {
                     setConfirmPassword(event.target.value);
                     setMessage("");
                   }}
-                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10"
+                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10 disabled:opacity-60"
                 />
               </div>
 
@@ -198,19 +225,25 @@ export default function SignUp() {
 
               <button
                 type="submit"
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-300 px-4 text-sm font-semibold text-[#08110e] transition hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1119]"
+                disabled={isSubmitting || isSuccess}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-300 px-4 text-sm font-semibold text-[#08110e] transition hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1119] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Create account
-                <ArrowRight size={16} />
+                {isSubmitting
+                  ? "Creating account..."
+                  : isSuccess
+                    ? "Account created"
+                    : "Create account"}
+                {!isSubmitting && !isSuccess && <ArrowRight size={16} />}
               </button>
 
               {message && (
                 <p
                   role="status"
+                  aria-live="polite"
                   className={`rounded-lg border p-3 text-xs leading-5 ${
-                    message === "Passwords do not match."
-                      ? "border-red-300/20 bg-red-300/[0.05] text-red-200"
-                      : "border-amber-300/20 bg-amber-300/[0.05] text-amber-200"
+                    isSuccess
+                      ? "border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-200"
+                      : "border-red-300/20 bg-red-300/[0.05] text-red-200"
                   }`}
                 >
                   {message}
@@ -232,7 +265,7 @@ export default function SignUp() {
           </div>
 
           <p className="mt-6 text-center text-xs leading-5 text-slate-600">
-            Account creation is not enabled in this preview.
+            Account creation requires a connection to the API.
           </p>
         </div>
       </section>

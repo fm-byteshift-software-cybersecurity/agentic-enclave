@@ -16,7 +16,13 @@ def get_authenticated_user(
         Depends(bearer_scheme),
     ],
 ) -> User:
-    if credentials is None:
+    cookie_token = request.cookies.get("access_token")
+
+    if cookie_token:
+        token = cookie_token
+    elif credentials is not None:
+        token = credentials.credentials
+    else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required.",
@@ -27,7 +33,7 @@ def get_authenticated_user(
     user_repository = request.app.state.user_repository
 
     try:
-        user_id = token_service.get_user_id(credentials.credentials)
+        user_id = token_service.get_user_id(token)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

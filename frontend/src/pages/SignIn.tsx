@@ -1,4 +1,3 @@
-
 import { useState, type FormEvent } from "react";
 import {
   ArrowLeft,
@@ -6,6 +5,14 @@ import {
   LockKeyhole,
   ShieldCheck,
 } from "lucide-react";
+
+
+import { apiPost, ApiError } from "../lib/api";
+
+interface AuthResponse {
+  user_id: number;
+  email: string;
+}
 
 function Brand() {
   return (
@@ -20,16 +27,44 @@ function Brand() {
   );
 }
 
-export default function SignIn() {
+export default function SignIn() {  
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage(
-      "Authentication is not implemented yet. This form is a UI preview.",
-    );
+    setMessage("");
+    setIsSubmitting(true);
+
+    try {
+      await apiPost<AuthResponse>("/api/auth/login", {
+        email,
+        password,
+      });
+
+      window.location.assign("/scenarios/sec-01-bola");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 401) {
+          setMessage("Invalid email or password.");
+        } else if (error.status === 403) {
+          setMessage(
+            "The request was rejected. Check the application origin configuration.",
+          );
+        } else if (error.status === 422) {
+          setMessage("Please check your email and password.");
+        } else {
+          setMessage(error.message);
+        }
+      } else {
+        setMessage("Unable to sign in. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -131,15 +166,16 @@ export default function SignIn() {
 
               <button
                 type="submit"
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-300 px-4 text-sm font-semibold text-[#08110e] transition hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1119]"
+                disabled={isSubmitting}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-300 px-4 text-sm font-semibold text-[#08110e] transition hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1119] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Sign in
-                <ArrowRight size={16} />
+                {isSubmitting ? "Signing in..." : "Sign in"}
+                {!isSubmitting && <ArrowRight size={16} />}
               </button>
 
               {message && (
                 <p
-                  role="status"
+                  role="alert"
                   className="rounded-lg border border-amber-300/20 bg-amber-300/[0.05] p-3 text-xs leading-5 text-amber-200"
                 >
                   {message}
@@ -161,7 +197,7 @@ export default function SignIn() {
           </div>
 
           <p className="mt-6 text-center text-xs leading-5 text-slate-600">
-            Authentication is not enabled in this preview.
+            Authentication is enabled for the security lab.
           </p>
         </div>
       </section>
