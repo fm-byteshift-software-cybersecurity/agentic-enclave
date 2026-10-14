@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
   LockKeyhole,
   ShieldCheck,
 } from "lucide-react";
-
 
 import { apiPost, ApiError } from "../lib/api";
 
@@ -16,18 +16,19 @@ interface AuthResponse {
 
 function Brand() {
   return (
-    <a href="/" className="inline-flex items-center gap-2.5">
+    <Link to="/" className="inline-flex items-center gap-2.5">
       <span className="flex size-9 items-center justify-center rounded-lg border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
         <ShieldCheck size={21} strokeWidth={1.8} />
       </span>
       <span className="text-[15px] font-semibold tracking-tight text-white">
         Agentic<span className="text-emerald-300">Enclave</span>
       </span>
-    </a>
+    </Link>
   );
 }
 
-export default function SignIn() {  
+export default function SignIn() {
+  const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,11 +42,11 @@ export default function SignIn() {
 
     try {
       await apiPost<AuthResponse>("/api/auth/login", {
-        email,
+        email: email.trim(),
         password,
       });
 
-      window.location.assign("/scenarios/sec-01-bola");
+      navigate("/lab/sec-01", { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 401) {
@@ -78,13 +79,13 @@ export default function SignIn() {
         >
           <Brand />
 
-          <a
-            href="/"
+          <Link
+            to="/"
             className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
           >
             <ArrowLeft size={15} />
             Back to home
-          </a>
+          </Link>
         </nav>
       </header>
 
@@ -126,11 +127,12 @@ export default function SignIn() {
                   placeholder="you@company.com"
                   required
                   value={email}
+                  disabled={isSubmitting}
                   onChange={(event) => {
                     setEmail(event.target.value);
                     setMessage("");
                   }}
-                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10"
+                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10 disabled:opacity-60"
                 />
               </div>
 
@@ -156,11 +158,12 @@ export default function SignIn() {
                   placeholder="Enter your password"
                   required
                   value={password}
+                  disabled={isSubmitting}
                   onChange={(event) => {
                     setPassword(event.target.value);
                     setMessage("");
                   }}
-                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10"
+                  className="h-11 w-full rounded-lg border border-white/10 bg-white/[0.025] px-3.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-300/50 focus:ring-2 focus:ring-emerald-300/10 disabled:opacity-60"
                 />
               </div>
 
@@ -176,6 +179,7 @@ export default function SignIn() {
               {message && (
                 <p
                   role="alert"
+                  aria-live="polite"
                   className="rounded-lg border border-amber-300/20 bg-amber-300/[0.05] p-3 text-xs leading-5 text-amber-200"
                 >
                   {message}
@@ -187,12 +191,12 @@ export default function SignIn() {
 
             <p className="text-center text-sm text-slate-400">
               Don't have an account?{" "}
-              <a
-                href="/signup"
+              <Link
+                to="/signup"
                 className="font-medium text-emerald-300 transition hover:text-emerald-200"
               >
                 Create account
-              </a>
+              </Link>
             </p>
           </div>
 

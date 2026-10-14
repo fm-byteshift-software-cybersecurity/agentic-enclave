@@ -1,5 +1,5 @@
-
 import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -8,38 +8,36 @@ import {
 } from "lucide-react";
 import { apiPost, ApiError } from "@/lib/api";
 
-
 interface RegisterResponse {
   user_id: number;
   email: string;
 }
 
-
 function Brand() {
   return (
-    <a href="/" className="inline-flex items-center gap-2.5">
+    <Link to="/" className="inline-flex items-center gap-2.5">
       <span className="flex size-9 items-center justify-center rounded-lg border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
         <ShieldCheck size={21} strokeWidth={1.8} />
       </span>
       <span className="text-[15px] font-semibold tracking-tight text-white">
         Agentic<span className="text-emerald-300">Enclave</span>
       </span>
-    </a>
+    </Link>
   );
 }
 
 export default function SignUp() {
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
-  const [isSuccess, setIsSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    setIsSuccess(false);
 
     if (password !== confirmPassword) {
       setMessage("Passwords do not match.");
@@ -49,21 +47,12 @@ export default function SignUp() {
     setIsSubmitting(true);
 
     try {
-      const result = await apiPost<RegisterResponse>(
-        "/api/auth/register",
-        {
-          email: email.trim(),
-          password,
-        },
-      );
+      await apiPost<RegisterResponse>("/api/auth/register", {
+        email: email.trim(),
+        password,
+      });
 
-      setIsSuccess(true);
-      setMessage(
-        `Account created successfully for ${result.email}. You can now sign in.`,
-      );
-      setEmail(result.email);
-      setPassword("");
-      setConfirmPassword("");
+      navigate("/lab/sec-01", { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {
@@ -96,13 +85,13 @@ export default function SignUp() {
         >
           <Brand />
 
-          <a
-            href="/"
+          <Link
+            to="/"
             className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
           >
             <ArrowLeft size={15} />
             Back to home
-          </a>
+          </Link>
         </nav>
       </header>
 
@@ -145,7 +134,7 @@ export default function SignUp() {
                   required
                   maxLength={254}
                   value={email}
-                  disabled={isSubmitting || isSuccess}
+                  disabled={isSubmitting}
                   onChange={(event) => {
                     setEmail(event.target.value);
                     setMessage("");
@@ -172,7 +161,7 @@ export default function SignUp() {
                   maxLength={128}
                   required
                   value={password}
-                  disabled={isSubmitting || isSuccess}
+                  disabled={isSubmitting}
                   onChange={(event) => {
                     setPassword(event.target.value);
                     setMessage("");
@@ -203,7 +192,7 @@ export default function SignUp() {
                   maxLength={128}
                   required
                   value={confirmPassword}
-                  disabled={isSubmitting || isSuccess}
+                  disabled={isSubmitting}
                   onChange={(event) => {
                     setConfirmPassword(event.target.value);
                     setMessage("");
@@ -225,26 +214,18 @@ export default function SignUp() {
 
               <button
                 type="submit"
-                disabled={isSubmitting || isSuccess}
+                disabled={isSubmitting}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-300 px-4 text-sm font-semibold text-[#08110e] transition hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0c1119] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSubmitting
-                  ? "Creating account..."
-                  : isSuccess
-                    ? "Account created"
-                    : "Create account"}
-                {!isSubmitting && !isSuccess && <ArrowRight size={16} />}
+                {isSubmitting ? "Creating account..." : "Create account"}
+                {!isSubmitting && <ArrowRight size={16} />}
               </button>
 
               {message && (
                 <p
-                  role="status"
+                  role="alert"
                   aria-live="polite"
-                  className={`rounded-lg border p-3 text-xs leading-5 ${
-                    isSuccess
-                      ? "border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-200"
-                      : "border-red-300/20 bg-red-300/[0.05] text-red-200"
-                  }`}
+                  className="rounded-lg border border-red-300/20 bg-red-300/[0.05] p-3 text-xs leading-5 text-red-200"
                 >
                   {message}
                 </p>
@@ -255,12 +236,12 @@ export default function SignUp() {
 
             <p className="text-center text-sm text-slate-400">
               Already have an account?{" "}
-              <a
-                href="/signin"
+              <Link
+                to="/signin"
                 className="font-medium text-emerald-300 transition hover:text-emerald-200"
               >
                 Sign in
-              </a>
+              </Link>
             </p>
           </div>
 
