@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import SignIn from "@/pages/SignIn";
 import SignUp from "@/pages/SignUp";
+import ScenarioBola from "@/pages/ScenarioBola";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -600,13 +601,20 @@ function App() {
   }, []);
 
   switch (path) {
-    case "/signin":
-      return <SignIn />;
-    case "/signup":
-      return <SignUp />;
-    default:
-      return <LandingPage />;
+  case "/signin":
+    return <SignIn />;
+
+  case "/signup":
+    return <SignUp />;
+
+  case "/lab/sec-01":
+  case "/scenarios/sec-01-bola":
+    return <ScenarioBola />;
+
+  default:
+    return <LandingPage />;
   }
+
 }
 
 export default App;
