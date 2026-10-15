@@ -16,20 +16,16 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiPost<TResponse>(
+async function request<TResponse>(
   path: string,
-  body: unknown,
+  init: RequestInit,
 ): Promise<TResponse> {
   let response: Response;
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      method: "POST",
+      ...init,
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
     });
   } catch {
     throw new ApiError("Unable to connect to the server. Please try again.", 0);
@@ -61,4 +57,23 @@ export async function apiPost<TResponse>(
   }
 
   return (await response.json()) as TResponse;
+}
+
+export function apiGet<TResponse>(path: string): Promise<TResponse> {
+  return request<TResponse>(path, {
+    method: "GET",
+  });
+}
+
+export function apiPost<TResponse>(
+  path: string,
+  body: unknown,
+): Promise<TResponse> {
+  return request<TResponse>(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 }
