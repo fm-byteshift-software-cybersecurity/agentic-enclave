@@ -1,22 +1,24 @@
-
 import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   ChevronRight,
   FlaskConical,
   LayoutDashboard,
   LockKeyhole,
+  LogOut,
   Menu,
   ShieldAlert,
   ShieldCheck,
   Workflow,
   Eye,
-  MessageSquareWarning,  
+  MessageSquareWarning,
   Users,
   Wrench,
   FileOutput,
   X,
 } from "lucide-react";
+import { apiPost, ApiError } from "@/lib/api";
 
 type ScenarioId =
   | "SEC-01"
@@ -117,7 +119,7 @@ const scenarios: NavigationItem[] = [
 
 function Brand() {
   return (
-    <a href="/" className="inline-flex items-center gap-3">
+    <Link to="/" className="inline-flex items-center gap-3">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
         <ShieldCheck size={20} strokeWidth={1.8} />
       </span>
@@ -125,16 +127,22 @@ function Brand() {
       <span className="text-sm font-semibold tracking-tight text-white">
         Agentic<span className="text-emerald-300">Enclave</span>
       </span>
-    </a>
+    </Link>
   );
 }
 
 function SidebarContent({
   activeScenario,
   onNavigate,
+  onLogout,
+  isLoggingOut,
+  logoutError,
 }: {
   activeScenario?: ScenarioId;
   onNavigate?: () => void;
+  onLogout: () => void;
+  isLoggingOut: boolean;
+  logoutError: string | null;
 }) {
   return (
     <>
@@ -147,15 +155,15 @@ function SidebarContent({
           Security lab
         </p>
 
-        <a
-          href="/"
+        <Link
+          to="/"
           onClick={onNavigate}
           className="mb-6 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition hover:bg-white/[0.04] hover:text-white"
         >
           <LayoutDashboard size={17} />
           Project overview
           <ArrowLeft className="ml-auto" size={14} />
-        </a>
+        </Link>
 
         <div className="mb-3 flex items-center justify-between px-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -199,9 +207,9 @@ function SidebarContent({
             }
 
             return (
-              <a
+              <Link
                 key={scenario.id}
-                href="/lab/sec-01"
+                to="/lab/sec-01"
                 onClick={onNavigate}
                 aria-current={isActive ? "page" : undefined}
                 className={`group flex items-start gap-3 rounded-lg border px-3 py-3 transition ${
@@ -238,7 +246,7 @@ function SidebarContent({
                     className="mt-0.5 shrink-0 text-emerald-300"
                   />
                 )}
-              </a>
+              </Link>
             );
           })}
         </nav>
@@ -257,7 +265,23 @@ function SidebarContent({
           </p>
         </div>
 
-        <p className="mt-4 px-1 text-[10px] text-slate-600">
+        {logoutError && (
+          <p role="alert" className="mt-3 px-1 text-xs leading-5 text-red-300">
+            {logoutError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={onLogout}
+          disabled={isLoggingOut}
+          className="mt-3 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition hover:bg-red-400/[0.08] hover:text-red-300 disabled:cursor-wait disabled:opacity-60"
+        >
+          <LogOut size={16} />
+          {isLoggingOut ? "Signing out..." : "Sign out"}
+        </button>
+
+        <p className="mt-3 px-1 text-[10px] text-slate-600">
           FM ByteShift Software
         </p>
       </div>
@@ -269,6 +293,40 @@ export default function LabSidebar({
   activeScenario,
 }: LabSidebarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+    setLogoutError(null);
+
+    try {
+      await apiPost<void>("/api/auth/logout", {});
+      setMobileMenuOpen(false);
+      navigate("/signin", { replace: true });
+    } catch (error) {
+      setLogoutError(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to sign out. Please try again.",
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
+
+  const sidebarProps = {
+    activeScenario,
+    onNavigate: () => setMobileMenuOpen(false),
+    onLogout: () => void handleLogout(),
+    isLoggingOut,
+    logoutError,
+  };
 
   return (
     <>
@@ -287,7 +345,7 @@ export default function LabSidebar({
       </header>
 
       <aside className="hidden min-h-screen w-64 shrink-0 flex-col border-r border-white/[0.07] bg-[#0a0e15] md:flex">
-        <SidebarContent activeScenario={activeScenario} />
+        <SidebarContent {...sidebarProps} />
       </aside>
 
       {mobileMenuOpen && (
@@ -311,10 +369,7 @@ export default function LabSidebar({
               </button>
             </div>
 
-            <SidebarContent
-              activeScenario={activeScenario}
-              onNavigate={() => setMobileMenuOpen(false)}
-            />
+            <SidebarContent {...sidebarProps} />
           </aside>
         </div>
       )}

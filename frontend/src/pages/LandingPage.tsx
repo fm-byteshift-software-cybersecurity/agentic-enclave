@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -8,6 +9,7 @@ import {
   ChevronRight,
   Code2,
   LockKeyhole,
+  LogOut,
   ShieldAlert,
   ShieldCheck,
   Terminal,
@@ -15,6 +17,14 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ApiError, apiGet, apiPost } from "@/lib/api";
+
+type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "error";
+
+interface AuthenticatedUser {
+  user_id: number;
+  email: string;
+}
 
 const scenarios = [
   {
@@ -165,6 +175,68 @@ function HeroPreview() {
 }
 
 export default function LandingPage() {
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function checkSession() {
+      try {
+        await apiGet<AuthenticatedUser>("/api/auth/me");
+
+        if (isMounted) {
+          setAuthStatus("authenticated");
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        if (error instanceof ApiError && error.status === 401) {
+          setAuthStatus("unauthenticated");
+        } else {
+          setAuthStatus("error");
+        }
+      }
+    }
+
+    void checkSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleLogout() {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+    setLogoutError(null);
+
+    try {
+      await apiPost<void>("/api/auth/logout", {});
+      setAuthStatus("unauthenticated");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        // The session is already invalid, so the user is effectively logged out.
+        setAuthStatus("unauthenticated");
+      } else {
+        setLogoutError(
+          error instanceof ApiError
+            ? error.message
+            : "Unable to sign out. Please try again.",
+        );
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
+
   return (
     <div className="min-h-screen overflow-hidden bg-[#080b11] text-slate-200 selection:bg-emerald-300/20 selection:text-emerald-100">
       <header className="relative z-10 border-b border-white/[0.07]">
@@ -196,20 +268,57 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              to="/signin"
-              className="hidden text-sm text-slate-300 transition hover:text-white sm:inline-flex"
-            >
-              Sign in
-            </Link>
-            <Button
-              asChild
-              className="h-9 rounded-lg bg-emerald-300 px-4 text-xs font-semibold text-[#08110e] hover:bg-emerald-200 sm:text-sm"
-            >
-              <Link to="/signup">
-                Get started <ArrowRight size={15} />
-              </Link>
-            </Button>
+            {authStatus === "unauthenticated" && (
+              <>
+                <Link
+                  to="/signin"
+                  className="hidden text-sm text-slate-300 transition hover:text-white sm:inline-flex"
+                >
+                  Sign in
+                </Link>
+                <Button
+                  asChild
+                  className="h-9 rounded-lg bg-emerald-300 px-4 text-xs font-semibold text-[#08110e] hover:bg-emerald-200 sm:text-sm"
+                >
+                  <Link to="/signup">
+                    Get started <ArrowRight size={15} />
+                  </Link>
+                </Button>
+              </>
+            )}
+
+            {authStatus === "authenticated" && (
+              <div className="flex flex-col items-end gap-1">
+                <Button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  disabled={isLoggingOut}
+                  variant="outline"
+                  className="h-9 rounded-lg border-white/15 bg-white/[0.02] px-4 text-xs text-slate-200 hover:bg-white/[0.06] hover:text-white sm:text-sm"
+                >
+                  <LogOut size={15} />
+                  {isLoggingOut ? "Signing out..." : "Sign out"}
+                </Button>
+                {logoutError && (
+                  <p
+                    role="alert"
+                    className="max-w-64 text-right text-xs text-red-300"
+                  >
+                    {logoutError}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {authStatus === "error" && (
+              <button
+                type="button"
+                onClick={() => navigate(0)}
+                className="text-sm text-slate-400 transition hover:text-white"
+              >
+                Retry session check
+              </button>
+            )}
           </div>
         </nav>
       </header>
