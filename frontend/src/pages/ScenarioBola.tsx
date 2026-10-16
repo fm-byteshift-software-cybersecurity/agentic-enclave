@@ -27,6 +27,7 @@ interface AgentResponse {
   message: string;
   order_id: number;
   order_status: string;
+  order_owner_id: number;
 }
 
 interface ChatMessage {
@@ -36,6 +37,7 @@ interface ChatMessage {
   httpStatus?: number;
   orderId?: number;
   orderStatus?: string;
+  orderOwnerId?: number;
   error?: boolean;
 }
 
@@ -148,6 +150,7 @@ export default function ScenarioBola() {
           httpStatus: 200,
           orderId: response.order_id,
           orderStatus: response.order_status,
+          orderOwnerId: response.order_owner_id,
         },
       ]);
     } catch (error) {
@@ -554,16 +557,24 @@ export default function ScenarioBola() {
                                 >
                                   HTTP {message.httpStatus}
                                 </span>
-                                {message.orderId !== undefined &&
-                                  message.orderStatus && (
-                                    <span className="text-[10px] text-slate-500">
-                                      Order #{message.orderId}:{" "}
-                                      <span className="text-slate-300">
-                                        {message.orderStatus}
+                                {message.orderId !== undefined && message.orderStatus && (
+                                <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                                  <span>
+                                    Order #{message.orderId}:{" "}
+                                    <span className="text-slate-300">{message.orderStatus}</span>
+                                  </span>
+
+                                  {message.orderOwnerId !== undefined && (
+                                    <span>
+                                      Owner ID:{" "}
+                                      <span className="font-semibold text-amber-300">
+                                        {message.orderOwnerId}
                                       </span>
                                     </span>
                                   )}
-                              </div>
+                                </div>
+                              )}
+                          </div>
                             )}
                           </div>
 
