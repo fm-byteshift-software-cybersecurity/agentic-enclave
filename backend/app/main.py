@@ -1,3 +1,4 @@
+
 import os
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -147,7 +148,6 @@ cors_origins = [
 trusted_origins = set(cors_origins)
 
 
-
 @app.middleware("http")
 async def validate_request_origin(
     request: Request,
@@ -167,7 +167,6 @@ async def validate_request_origin(
     return await call_next(request)
 
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -183,6 +182,7 @@ async def execute_cancellation(
     request: CancelOrderRequest,
     user: User,
     runtime: OpenAIRuntime | VulnerableOpenAIRuntime,
+    repository: OrderRepository,
 ) -> dict[str, str | int]:
     context = OpenAIAgentContext(
         application_context=AgentContext(
@@ -241,10 +241,20 @@ async def execute_cancellation(
             detail="The agent returned an invalid cancellation result.",
         )
 
+    # Retrieve the authoritative owner ID from the persisted order.
+    order = repository.get_by_id(order_id)
+
+    if order is None:
+        raise HTTPException(
+            status_code=502,
+            detail="The cancelled order could not be retrieved.",
+        )
+
     return {
         "message": result.final_output,
         "order_id": order_id,
         "order_status": order_status,
+        "order_owner_id": order.customer_id,
     }
 
 
@@ -253,14 +263,14 @@ async def cancel_order(
     request: CancelOrderRequest,
     user: Annotated[User, Depends(get_authenticated_user)],
 ) -> dict[str, str | int]:
-    runtime = create_runtime(
-        repository=app.state.order_repository,
-    )
+    repository = app.state.order_repository
+    runtime = create_runtime(repository=repository)
 
     return await execute_cancellation(
         request=request,
         user=user,
         runtime=runtime,
+        repository=repository,
     )
 
 
@@ -269,12 +279,12 @@ async def cancel_order_vulnerable(
     request: CancelOrderRequest,
     user: Annotated[User, Depends(get_authenticated_user)],
 ) -> dict[str, str | int]:
-    runtime = create_vulnerable_runtime(
-        repository=app.state.order_repository,
-    )
+    repository = app.state.order_repository
+    runtime = create_vulnerable_runtime(repository=repository)
 
     return await execute_cancellation(
         request=request,
         user=user,
         runtime=runtime,
+        repository=repository,
     )
