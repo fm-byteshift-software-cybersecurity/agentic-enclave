@@ -1,4 +1,3 @@
-
 from backend.app.adapters.database.turso_connection import (
     create_turso_connection,
 )
@@ -6,6 +5,7 @@ from backend.app.adapters.database.turso_connection import (
 
 def initialize_schema() -> None:
     connection = create_turso_connection()
+
     try:
         connection.execute(
             """
@@ -31,10 +31,36 @@ def initialize_schema() -> None:
                         'delivered',
                         'cancelled'
                     )
-                )
+                ),
+                is_demo INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_demo IN (0, 1)),
+                lab_owner_id INTEGER
             )
             """
         )
+
+        # Migrate existing databases without recreating the table.
+        result = connection.execute("PRAGMA table_info(orders)")
+        existing_columns = {
+            row[1] for row in result.fetchall()
+        }
+
+        if "is_demo" not in existing_columns:
+            connection.execute(
+                """
+                ALTER TABLE orders
+                ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_demo IN (0, 1))
+                """
+            )
+
+        if "lab_owner_id" not in existing_columns:
+            connection.execute(
+                """
+                ALTER TABLE orders
+                ADD COLUMN lab_owner_id INTEGER
+                """
+            )
 
         connection.commit()
     finally:

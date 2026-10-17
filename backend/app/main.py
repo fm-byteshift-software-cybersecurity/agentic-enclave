@@ -45,13 +45,16 @@ from backend.app.application.tools.vulnerable_cancel_order_tool import (
     VulnerableCancelOrderTool,
 )
 from backend.app.application.use_cases.cancel_order import CancelOrderUseCase
+from backend.app.application.use_cases.reset_demo_orders import (
+    ResetDemoOrdersUseCase,
+)
 from backend.app.application.use_cases.vulnerable_cancel_order import (
     VulnerableCancelOrderUseCase,
 )
 from backend.app.domain.exceptions.business_rule_violation import (
     BusinessRuleViolation,
 )
-from backend.app.domain.model.order import Order, OrderStatus
+from backend.app.domain.model.order import OrderStatus
 from backend.app.domain.model.user import User
 
 
@@ -70,26 +73,6 @@ async def lifespan(app: FastAPI):
 
         password_hasher = PasswordHasher()
         token_service = JWTTokenService()
-
-        # Demo data: create sample orders only if they do not exist.
-        if order_repository.get_by_id(1842) is None:
-            order_repository.save(
-                Order(
-                    id=1842,
-                    customer_id=1,
-                    status=OrderStatus.PENDING,
-                )
-            )
-
-        # BOLA demonstration: order 1844 belongs to user 2.
-        if order_repository.get_by_id(1844) is None:
-            order_repository.save(
-                Order(
-                    id=1844,
-                    customer_id=2,
-                    status=OrderStatus.PENDING,
-                )
-            )
 
         app.state.connection = connection
         app.state.order_repository = order_repository
@@ -178,6 +161,47 @@ app.add_middleware(
 app.include_router(auth_router)
 
 
+@app.get("/api/lab/sec-01/orders")
+async def list_lab_orders(
+    user: Annotated[User, Depends(get_authenticated_user)],
+) -> dict[str, list[dict[str, str | int]]]:
+    repository = app.state.order_repository
+    orders = repository.list_demo_orders(lab_owner_id=user.id)
+
+    return {
+        "orders": [
+            {
+                "id": order.id,
+                "customer_id": order.customer_id,
+                "status": order.status.value,
+            }
+            for order in orders
+        ]
+    }
+
+
+@app.post("/api/lab/sec-01/reset")
+async def reset_lab_orders(
+    user: Annotated[User, Depends(get_authenticated_user)],
+) -> dict[str, str | list[dict[str, str | int]]]:
+    repository = app.state.order_repository
+    use_case = ResetDemoOrdersUseCase(repository)
+
+    orders = use_case.execute(lab_owner_id=user.id)
+
+    return {
+        "message": "Demo orders reset successfully.",
+        "orders": [
+            {
+                "id": order.id,
+                "customer_id": order.customer_id,
+                "status": order.status.value,
+            }
+            for order in orders
+        ],
+    }
+
+
 async def execute_cancellation(
     request: CancelOrderRequest,
     user: User,
@@ -241,7 +265,6 @@ async def execute_cancellation(
             detail="The agent returned an invalid cancellation result.",
         )
 
-    # Retrieve the authoritative owner ID from the persisted order.
     order = repository.get_by_id(order_id)
 
     if order is None:

@@ -21,9 +21,21 @@ class InMemoryOrderRepository(OrderRepository):
 
     def get_by_id(self, order_id: int) -> Order | None:
         return self.orders.get(order_id)
+    
+    def list_demo_orders(self, lab_owner_id: int) -> list[Order]:
+        return []
 
     def save(self, order: Order) -> None:
-        self.orders[order.id] = order
+        self.orders[order.id] = order   
+    
+    def reset_demo_orders(
+        self,
+        lab_owner_id: int,
+        orders: list[Order],
+    ) -> list[Order]:
+        return orders   
+
+    
 
 
 def create_runtime(
