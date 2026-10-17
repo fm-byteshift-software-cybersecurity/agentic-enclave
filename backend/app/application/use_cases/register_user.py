@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from backend.app.application.ports.password_hasher import PasswordHasher
 from backend.app.application.ports.token_service import TokenService
 from backend.app.application.ports.user_repository import UserRepository
+from backend.app.application.ports.order_repository import OrderRepository
 from backend.app.domain.model.user import User
 
 
@@ -24,10 +25,12 @@ class RegisterUserUseCase:
         user_repository: UserRepository,
         password_hasher: PasswordHasher,
         token_service: TokenService,
+        order_repository: OrderRepository,
     ) -> None:
         self._user_repository = user_repository
         self._password_hasher = password_hasher
         self._token_service = token_service
+        self._order_repository = order_repository
 
     def execute(self, email: str, password: str) -> RegisterUserResult:
         normalized_email = email.strip().lower()
@@ -47,6 +50,8 @@ class RegisterUserUseCase:
 
         if user.id is None:
             raise RuntimeError("The repository did not assign a user ID.")
+        
+        self._order_repository.populate_demo_orders(user.id)
 
         access_token = self._token_service.create_access_token(user.id)
 

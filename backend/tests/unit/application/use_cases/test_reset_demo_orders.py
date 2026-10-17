@@ -31,6 +31,9 @@ class FakeOrderRepository(OrderRepository):
         self.lab_owner_id = lab_owner_id
         self.orders = orders
         return orders
+    
+    def populate_demo_orders(self, lab_owner_id: int) -> list[Order]:
+            return []
 
 
 def test_execute_creates_own_order_and_synthetic_victim_order() -> None:

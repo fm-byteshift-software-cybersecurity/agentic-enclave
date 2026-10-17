@@ -1,6 +1,8 @@
+
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.domain.model.order import Order
 from backend.app.domain.model.user import User
 from backend.app.main import app
 
@@ -32,6 +34,15 @@ class FakeUserRepository:
         self.next_id += 1
         self.users_by_email[saved_user.email] = saved_user
         return saved_user
+
+
+class FakeOrderRepository:
+    def __init__(self) -> None:
+        self.populated_lab_owner_ids: list[int] = []
+
+    def populate_demo_orders(self, lab_owner_id: int) -> list[Order]:
+        self.populated_lab_owner_ids.append(lab_owner_id)
+        return []
 
 
 class FakePasswordHasher:
@@ -74,6 +85,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("APP_ENV", "development")
 
     app.state.user_repository = FakeUserRepository()
+    app.state.order_repository = FakeOrderRepository()
     app.state.password_hasher = FakePasswordHasher()
     app.state.token_service = FakeTokenService()
 
@@ -81,9 +93,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # Entering its context starts the application's lifespan, which
     # replaces these fakes with the real database-backed dependencies.
     return TestClient(
-    app,
-    headers={"Origin": "http://localhost:5173"},
-)
+        app,
+        headers={"Origin": "http://localhost:5173"},
+    )
 
 
 def assert_auth_cookie(response, expected_token: str) -> None:
@@ -120,6 +132,7 @@ def test_register_returns_created_user_and_sets_http_only_cookie(
     assert "token_type" not in response.json()
     assert_auth_cookie(response, "test-token-1")
     assert app.state.token_service.created_user_ids == [1]
+    assert app.state.order_repository.populated_lab_owner_ids == [1]
 
 
 def test_register_returns_conflict_for_existing_email(
@@ -146,6 +159,7 @@ def test_register_returns_conflict_for_existing_email(
         "An account with this email already exists."
     )
     assert app.state.token_service.created_user_ids == [1]
+    assert app.state.order_repository.populated_lab_owner_ids == [1]
 
 
 def test_login_returns_user_and_sets_http_only_cookie(
@@ -177,6 +191,7 @@ def test_login_returns_user_and_sets_http_only_cookie(
     assert "token_type" not in response.json()
     assert_auth_cookie(response, "test-token-1")
     assert app.state.token_service.created_user_ids == [1, 1]
+    assert app.state.order_repository.populated_lab_owner_ids == [1]
 
 
 def test_login_rejects_invalid_credentials(
@@ -193,6 +208,7 @@ def test_login_rejects_invalid_credentials(
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid email or password."
     assert app.state.token_service.created_user_ids == []
+    assert app.state.order_repository.populated_lab_owner_ids == []
     assert "set-cookie" not in response.headers
 
 
@@ -210,6 +226,7 @@ def test_register_rejects_password_shorter_than_minimum(
     assert response.status_code == 422
     assert app.state.user_repository.users_by_email == {}
     assert app.state.token_service.created_user_ids == []
+    assert app.state.order_repository.populated_lab_owner_ids == []
 
 
 def test_logout_deletes_access_token_cookie(
@@ -232,5 +249,3 @@ def test_logout_deletes_access_token_cookie(
     assert "access_token=" in set_cookie
     assert "max-age=0" in set_cookie.lower()
     assert "httponly" in set_cookie.lower()
-
-

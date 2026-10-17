@@ -32,7 +32,10 @@ class InMemoryOrderRepository(OrderRepository):
         lab_owner_id: int,
         orders: list[Order],
     ) -> list[Order]:
-        return orders    
+        return orders   
+    
+    def populate_demo_orders(self, lab_owner_id: int) -> list[Order]:
+            return []
 
 
 def create_tool(

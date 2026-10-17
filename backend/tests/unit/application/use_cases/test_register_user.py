@@ -1,3 +1,4 @@
+
 import pytest
 
 from backend.app.application.use_cases.register_user import (
@@ -52,15 +53,26 @@ class FakeTokenService:
         return f"token-for-user-{user_id}"
 
 
+class FakeOrderRepository:
+    def __init__(self) -> None:
+        self.populated_lab_owner_ids: list[int] = []
+
+    def populate_demo_orders(self, lab_owner_id: int) -> list:
+        self.populated_lab_owner_ids.append(lab_owner_id)
+        return []
+
+
 def test_register_user_normalizes_email_hashes_password_and_creates_token() -> None:
     repository = FakeUserRepository(assigned_id=42)
     password_hasher = FakePasswordHasher()
     token_service = FakeTokenService()
+    order_repository = FakeOrderRepository()
 
     use_case = RegisterUserUseCase(
         user_repository=repository,
         password_hasher=password_hasher,
         token_service=token_service,
+        order_repository=order_repository,
     )
 
     result = use_case.execute(
@@ -83,6 +95,7 @@ def test_register_user_normalizes_email_hashes_password_and_creates_token() -> N
         "a-strong-test-password"
     ]
     assert token_service.user_ids == [42]
+    assert order_repository.populated_lab_owner_ids == [42]
 
 
 def test_register_user_rejects_existing_email_without_hashing_or_creating_token() -> None:
@@ -94,11 +107,13 @@ def test_register_user_rejects_existing_email_without_hashing_or_creating_token(
     repository = FakeUserRepository(existing_user=existing_user)
     password_hasher = FakePasswordHasher()
     token_service = FakeTokenService()
+    order_repository = FakeOrderRepository()
 
     use_case = RegisterUserUseCase(
         user_repository=repository,
         password_hasher=password_hasher,
         token_service=token_service,
+        order_repository=order_repository,
     )
 
     with pytest.raises(UserAlreadyExists):
@@ -110,17 +125,20 @@ def test_register_user_rejects_existing_email_without_hashing_or_creating_token(
     assert repository.saved_user is None
     assert password_hasher.hashed_passwords == []
     assert token_service.user_ids == []
+    assert order_repository.populated_lab_owner_ids == []
 
 
 def test_register_user_raises_if_repository_does_not_assign_id() -> None:
     repository = FakeUserRepository(assigned_id=None)
     password_hasher = FakePasswordHasher()
     token_service = FakeTokenService()
+    order_repository = FakeOrderRepository()
 
     use_case = RegisterUserUseCase(
         user_repository=repository,
         password_hasher=password_hasher,
         token_service=token_service,
+        order_repository=order_repository,
     )
 
     with pytest.raises(
@@ -137,3 +155,4 @@ def test_register_user_raises_if_repository_does_not_assign_id() -> None:
         "a-strong-test-password"
     ]
     assert token_service.user_ids == []
+    assert order_repository.populated_lab_owner_ids == []

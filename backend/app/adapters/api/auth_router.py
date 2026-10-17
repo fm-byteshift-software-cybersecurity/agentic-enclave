@@ -53,6 +53,7 @@ def register(
         user_repository=request.app.state.user_repository,
         password_hasher=request.app.state.password_hasher,
         token_service=request.app.state.token_service,
+        order_repository=request.app.state.order_repository,
     )
 
     try:
