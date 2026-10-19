@@ -1,4 +1,3 @@
-
 import pytest
 
 from backend.app.application.ports.order_repository import OrderRepository
@@ -16,7 +15,10 @@ class FakeOrderRepository(OrderRepository):
 
     def get_by_id(self, order_id: int) -> Order | None:
         return None
-    
+
+    def belongs_to_lab(self, order_id: int, lab_owner_id: int) -> bool:
+        return False
+
     def list_demo_orders(self, lab_owner_id: int) -> list[Order]:
         return []
 
@@ -31,9 +33,9 @@ class FakeOrderRepository(OrderRepository):
         self.lab_owner_id = lab_owner_id
         self.orders = orders
         return orders
-    
+
     def populate_demo_orders(self, lab_owner_id: int) -> list[Order]:
-            return []
+        return []
 
 
 def test_execute_creates_own_order_and_synthetic_victim_order() -> None:

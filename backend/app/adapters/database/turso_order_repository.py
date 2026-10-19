@@ -1,4 +1,3 @@
-
 from typing import Any
 
 from backend.app.application.ports.order_repository import OrderRepository
@@ -29,8 +28,21 @@ class TursoOrderRepository(OrderRepository):
             customer_id=row[1],
             status=OrderStatus(row[2]),
         )
-        
-    
+
+    def belongs_to_lab(self, order_id: int, lab_owner_id: int) -> bool:
+        result = self._connection.execute(
+            """
+            SELECT 1
+            FROM orders
+            WHERE id = ?
+              AND lab_owner_id = ?
+            LIMIT 1
+            """,
+            (order_id, lab_owner_id),
+        )
+
+        return result.fetchone() is not None
+
     def list_demo_orders(self, lab_owner_id: int) -> list[Order]:
         result = self._connection.execute(
             """
@@ -66,8 +78,7 @@ class TursoOrderRepository(OrderRepository):
             (order.id, order.customer_id, order.status.value),
         )
         self._connection.commit()
-        
-    
+
     def populate_demo_orders(self, lab_owner_id: int) -> list[Order]:
         orders = [
             Order(
@@ -124,7 +135,6 @@ class TursoOrderRepository(OrderRepository):
         except Exception:
             self._connection.rollback()
             raise
-    
 
     def reset_demo_orders(
         self,

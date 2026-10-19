@@ -18,27 +18,29 @@ from backend.app.domain.model.order import Order, OrderStatus
 class InMemoryOrderRepository(OrderRepository):
     def __init__(self, orders: list[Order]) -> None:
         self.orders = {order.id: order for order in orders}
+        self.lab_owners = {order.id: order.customer_id for order in orders}
 
     def get_by_id(self, order_id: int) -> Order | None:
         return self.orders.get(order_id)
-    
+
+    def belongs_to_lab(self, order_id: int, lab_owner_id: int) -> bool:
+        return self.lab_owners.get(order_id) == lab_owner_id
+
     def list_demo_orders(self, lab_owner_id: int) -> list[Order]:
         return []
 
     def save(self, order: Order) -> None:
-        self.orders[order.id] = order   
-    
+        self.orders[order.id] = order
+
     def reset_demo_orders(
         self,
         lab_owner_id: int,
         orders: list[Order],
     ) -> list[Order]:
-        return orders   
-        
+        return orders
+
     def populate_demo_orders(self, lab_owner_id: int) -> list[Order]:
         return []
-
-    
 
 
 def create_runtime(

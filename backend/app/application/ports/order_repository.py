@@ -30,4 +30,10 @@ class OrderRepository(ABC):
     @abstractmethod
     def populate_demo_orders(self, lab_owner_id: int) -> list[Order]:
         """Create the initial demo orders for a user's lab."""
+        pass    
+    
+    @abstractmethod
+    def belongs_to_lab(self, order_id: int, lab_owner_id: int) -> bool:
+        """Return whether the order belongs to the specified lab."""
         pass
+

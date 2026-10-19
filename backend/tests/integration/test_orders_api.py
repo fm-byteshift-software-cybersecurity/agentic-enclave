@@ -1,4 +1,3 @@
-
 import re
 
 import pytest
@@ -56,11 +55,24 @@ class FakeUserRepository:
 
 
 class InMemoryOrderRepository:
-    def __init__(self, orders: list[Order]) -> None:
+    def __init__(
+        self,
+        orders: list[Order],
+        lab_owners: dict[int, int] | None = None,
+    ) -> None:
         self.orders = {order.id: order for order in orders}
+        self.lab_owners = {
+            order.id: 1
+            for order in orders
+        }
+        if lab_owners is not None:
+            self.lab_owners.update(lab_owners)
 
     def get_by_id(self, order_id: int) -> Order | None:
         return self.orders.get(order_id)
+
+    def belongs_to_lab(self, order_id: int, lab_owner_id: int) -> bool:
+        return self.lab_owners.get(order_id) == lab_owner_id
 
     def save(self, order: Order) -> None:
         self.orders[order.id] = order
@@ -152,7 +164,15 @@ def client(monkeypatch):
                 customer_id=2,
                 status=OrderStatus.PENDING,
             ),
-        ]
+            Order(
+                id=1845,
+                customer_id=2,
+                status=OrderStatus.PENDING,
+            ),
+        ],
+        lab_owners={
+            1845: 2,
+        },
     )
 
     def create_test_runtime(repository):
@@ -187,8 +207,8 @@ def client(monkeypatch):
 
     # Não executar o lifespan: ele inicializa a conexão com o Turso.
     test_client = TestClient(
-    main.app,
-    headers={"Origin": "http://localhost:5173"},
+        main.app,
+        headers={"Origin": "http://localhost:5173"},
     )
     yield test_client
     test_client.close()
@@ -291,6 +311,22 @@ def test_vulnerable_endpoint_allows_bola_order_cancellation(
     assert (
         client.app.state.order_repository.get_by_id(1844).status
         == OrderStatus.CANCELLED
+    )
+
+
+def test_vulnerable_endpoint_blocks_cross_lab_cancellation(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/vulnerable/orders/cancel",
+        headers={"Authorization": "Bearer test-token"},
+        json={"user_input": "Cancel order 1845"},
+    )
+
+    assert response.status_code == 404
+    assert (
+        client.app.state.order_repository.get_by_id(1845).status
+        == OrderStatus.PENDING
     )
 
 
