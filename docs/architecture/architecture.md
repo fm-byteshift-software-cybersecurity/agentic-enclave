@@ -22,7 +22,7 @@ AgenticEnclave follows a pragmatic combination of:
 - **Dependency Inversion:** Make infrastructure implementations depend on abstractions owned by the application core.
 - **Domain-Driven Design principles:** Represent business concepts and enforce domain invariants explicitly.
 - **Application use cases:** Coordinate business operations and security-sensitive decisions.
-- **Security by design:** Enforce authorization at application execution boundaries.
+- **Security by design:** Enforce security controls at application execution boundaries.
 - **Testability:** Verify business behavior and security controls independently of the LLM wherever practical.
 
 The architecture favors explicit boundaries over abstractions introduced solely for theoretical purity.
@@ -87,7 +87,7 @@ OpenAI Adapter ──────► Application Tool Contract
 
 The arrows represent dependencies on interfaces or components. They do not imply that every component calls every other component directly.
 
-For example, `TursoOrderRepository` implements the `OrderRepository` port consumed by application use cases. The use case does not need to know how Turso stores or retrieves orders.
+For example, `TursoOrderRepository` implements the `OrderRepository` port consumed by application use cases. The use cases do not need to know how Turso stores or retrieves orders.
 
 The following dependencies are prohibited by design:
 
@@ -126,20 +126,25 @@ The Application layer coordinates use cases and enforces application-level polic
 Current responsibilities include:
 
 - Executing use cases
-- Evaluating authorization policies
+- Evaluating authorization policies where required
 - Defining permissions and actor context
 - Defining application tool contracts
 - Accessing persistence through repository ports
+- Enforcing lab isolation in the vulnerable demonstration flow
 
-The implemented cancellation flow includes `CancelOrderUseCase`, `AuthorizationPolicy`, `Actor`, `Permission`, and `OrderRepository`.
+The implemented cancellation flow includes `CancelOrderUseCase`, `VulnerableCancelOrderUseCase`, the relevant cancellation tools, `AuthorizationPolicy`, `Actor`, `Permission`, and `OrderRepository`.
 
-Application-level authorization and domain business rules serve different purposes and must remain separate.
+The hardened and vulnerable use cases intentionally enforce different security rules. This difference is required to demonstrate BOLA and its mitigation.
+
+Application-level authorization, lab isolation, and domain business rules serve different purposes and must remain separate.
 
 ### 5.3 Ports
 
 Ports define the interfaces required by application logic.
 
 The current order workflow uses `OrderRepository`, which abstracts order retrieval and persistence.
+
+The repository port also exposes `belongs_to_lab(order_id, lab_owner_id)`, allowing application logic to verify that an order belongs to the authenticated user's lab without depending on the database implementation.
 
 A port describes what the application needs rather than how an external system implements it.
 
@@ -155,7 +160,7 @@ Its responsibilities include:
 
 - Receiving HTTP requests
 - Establishing the authenticated user context
-- Invoking the appropriate runtime
+- Invoking the appropriate runtime or application flow
 - Mapping application failures to HTTP responses
 - Returning serialized results
 
@@ -170,6 +175,8 @@ The current implementation includes:
 - **Turso / libSQL:** Persistence through the database repository adapter.
 - **OpenAI Agents SDK:** Agent execution and function-tool integration.
 
+`TursoOrderRepository` implements the repository port, including the lab-membership query used to isolate demonstration environments.
+
 Provider-specific SDK objects and database implementation details should remain outside the domain.
 
 ## 6. AI Agent Execution
@@ -178,7 +185,7 @@ Agents are application capabilities orchestrated through an external agent runti
 
 The current Orders Agent can request an order-cancellation operation through a registered function tool.
 
-Its execution flow is:
+The general execution flow is:
 
 ```text
 Authenticated HTTP Request
@@ -193,42 +200,35 @@ Authenticated HTTP Request
       Function Tool Adapter
             │
             ▼
-      CancelOrderTool
+       Application Tool
             │
             ▼
-     CancelOrderUseCase
-            │
-            ├── Retrieve Order
-            │
-            ├── Check Authorization
-            │
-            ├── Apply Domain Rules
+        Use Case
             │
             ▼
       OrderRepository
             │
             ▼
-      Turso Database
+       Turso Database
 ```
 
-The model interprets the request and may generate a tool call containing an `order_id`. The tool adapter passes the arguments to the application tool, which delegates to the use case.
+The exact use case and security checks depend on the endpoint being exercised.
+
+The model interprets the request and may generate a tool call containing an `order_id`. The tool adapter passes the arguments to the application tool, which delegates to the appropriate use case.
 
 The authenticated actor is derived from the application context established by the API, not from an order ID or identity claimed by the LLM.
 
 The model can request an operation, but the application determines whether it may proceed.
 
-## 7. Authorization Architecture
+## 7. Authorization and Lab Isolation
 
-Authorization is an application-level security responsibility.
+Authorization and lab isolation are distinct security controls.
 
-The current implementation defines:
+### 7.1 Hardened Path: Customer Ownership
 
-- `Actor`: Represents the identity and execution context of the actor.
-- `Permission`: Identifies the requested capability.
-- `AuthorizationPolicy`: Evaluates whether an operation is allowed.
-- `AuthorizationDenied`: Represents a denied authorization decision.
+The hardened cancellation path uses the application's authorization policy to determine whether the authenticated actor is permitted to cancel the requested order.
 
-For order cancellation, the use case retrieves the order and checks whether the actor is permitted to cancel an order belonging to the associated customer before modifying its state.
+The policy checks customer ownership using trusted application identity and resource data. A customer cannot cancel another customer's order merely by supplying its ID.
 
 Conceptually:
 
@@ -236,15 +236,12 @@ Conceptually:
 Authenticated Actor
         │
         ▼
-  Requested Operation
-        │
-        ▼
     Order Lookup
         │
         ▼
  Authorization Policy
         │
-        ├── Denied → Reject
+        ├── Denied → AuthorizationDenied
         │
         ▼
    Domain Operation
@@ -253,11 +250,57 @@ Authenticated Actor
    Persist Changes
 ```
 
-The lookup occurs before the ownership check because the policy needs the order's owner. The state-changing operation and persistence occur only after authorization succeeds.
+A denied ownership check prevents the state-changing operation. The API maps the relevant authorization failure to an HTTP response.
+
+### 7.2 Vulnerable Path: BOLA Within a Lab
+
+The vulnerable cancellation path deliberately omits customer-ownership authorization so that Broken Object Level Authorization (BOLA) can be demonstrated.
+
+However, the vulnerable path does **not** remove every security boundary. It verifies that the requested order belongs to the authenticated actor's lab before retrieving and modifying it.
+
+Its execution flow is:
+
+```text
+Authenticated Actor
+        │
+        ▼
+VulnerableCancelOrderTool
+        │
+        ▼
+VulnerableCancelOrderUseCase
+        │
+        ▼
+ belongs_to_lab(order_id, actor.user_id)
+        │
+        ├── False → EntityNotFound → HTTP 404
+        │
+        ▼
+    Order Lookup
+        │
+        ▼
+    Domain Cancel
+        │
+        ▼
+   Persist Changes
+```
+
+The repository check uses the order's `lab_owner_id`, not its `customer_id`.
+
+This creates the intended demonstration boundary:
+
+- **Same lab, different customer:** The vulnerable path permits cancellation if the order can otherwise be cancelled.
+- **Different lab:** The vulnerable path rejects the request and returns the same not-found application error used for a nonexistent order.
+- **Hardened path, different customer:** The hardened path denies cancellation even when the order belongs to the same lab.
+
+Returning `EntityNotFound` for an order outside the actor's lab avoids exposing whether that order exists in another lab.
+
+### 7.3 Trusted Context
+
+The lab owner identifier is derived from the authenticated actor's application context. It must not be accepted as an arbitrary identity supplied by the LLM.
 
 Authentication establishes identity; it does not automatically grant access to every resource.
 
-Authorization decisions must use trusted application context and resource attributes rather than model-generated claims. Missing or invalid authorization context must not result in permission being granted.
+Missing or invalid authorization context must not result in permission being granted.
 
 ## 8. Tool Architecture
 
@@ -265,7 +308,7 @@ Tools expose specific application capabilities to agents.
 
 A tool is not equivalent to direct access to a database or an unrestricted application service.
 
-The current cancellation tool delegates to `CancelOrderUseCase`, keeping the operation's authorization and business rules in the application layer.
+The cancellation tools delegate to their respective application use cases, keeping the security decisions and business behavior within the application layer.
 
 The intended boundary is:
 
@@ -288,29 +331,27 @@ Tools must not bypass the use cases responsible for the relevant operation.
 Three concepts must remain distinct:
 
 - **Tool availability:** The capability is exposed to an agent.
-- **Authorization:** The current actor may perform the operation on the requested resource.
+- **Authorization and isolation:** The current actor is permitted to access the resource within the relevant security boundary.
 - **Business validity:** The operation satisfies domain rules.
 
 Availability does not imply authorization, and authorization does not imply that a business operation is valid.
 
-## 9. Business Rules and Authorization
+## 9. Business Rules and Security Controls
 
-Authorization and domain rules answer different questions.
+Security checks and domain rules answer different questions.
+
+**Lab isolation:** Does the requested order belong to the authenticated actor's lab?
 
 **Authorization:** Is this actor permitted to perform this operation on this resource?
 
-Example: Is the authenticated customer allowed to cancel this order?
-
 **Domain rule:** Is this operation valid under the business rules?
 
-Example: Is the order in a state that permits cancellation?
-
-The intended sequence is:
+For the vulnerable path, the intended sequence is:
 
 ```text
-Resource Retrieval
+Lab Isolation Check
         ↓
-Authorization
+Resource Retrieval
         ↓
 Domain Rule Validation
         ↓
@@ -319,7 +360,21 @@ State Mutation
 Persistence
 ```
 
-Both authorization and domain validation are necessary. Passing one does not replace the other.
+For the hardened path, the intended sequence is:
+
+```text
+Resource Retrieval
+        ↓
+Customer Ownership Authorization
+        ↓
+Domain Rule Validation
+        ↓
+State Mutation
+        ↓
+Persistence
+```
+
+These checks are not interchangeable. The vulnerable demonstration intentionally omits customer-ownership authorization, but retains lab isolation and domain-level cancellation rules.
 
 ## 10. Vulnerable and Hardened Implementations
 
@@ -329,9 +384,14 @@ The vulnerable implementation intentionally omits a specific control. The harden
 
 The current example is **SEC-01: Broken Object Level Authorization (BOLA)**.
 
-The vulnerable cancellation use case retrieves an order and attempts to cancel it without checking whether the actor is authorized to access that order. The hardened use case evaluates the authorization policy before changing the order's state.
+The vulnerable implementation omits customer-ownership authorization while enforcing lab isolation through `OrderRepository.belongs_to_lab`. The hardened implementation checks customer ownership through the authorization policy before changing the order's state.
 
-The two implementations share the relevant domain model and persistence infrastructure, allowing the security difference to be demonstrated without maintaining two independent applications.
+Both implementations share the relevant domain model and persistence infrastructure, allowing the security difference to be demonstrated without maintaining two independent applications.
+
+The relevant API endpoints are:
+
+- `POST /api/vulnerable/orders/cancel`
+- `POST /api/orders/cancel`
 
 The vulnerable endpoint is intended only for controlled demonstrations and must not be exposed as a production capability.
 
@@ -345,6 +405,13 @@ The project uses multiple testing levels as appropriate to each component:
 - **Integration tests:** Interactions among application components, repositories, and API entry points.
 - **Security tests:** Deliberately constructed attacks against vulnerable and hardened paths.
 - **End-to-end tests:** Complete application workflows where required.
+
+For SEC-01, verification covers the intended differences between the paths:
+
+- Same-lab, cross-customer cancellation is permitted by the vulnerable path when domain rules allow it.
+- Cross-lab cancellation is rejected by the vulnerable path without modifying the order.
+- Cross-customer cancellation is rejected by the hardened path without modifying the order.
+- Domain rules continue to apply independently of the selected path.
 
 Deterministic test doubles can verify application security behavior without relying on nondeterministic LLM responses. Manual API validation can separately exercise the real agent runtime.
 
@@ -375,12 +442,13 @@ The following rules guide implementation and code review:
 1. **The domain remains independent of infrastructure and agent frameworks.**
 2. **LLM output cannot authorize an operation.**
 3. **Security-sensitive tools delegate to application use cases rather than bypassing them.**
-4. **Resource-level authorization is enforced using trusted identity and resource data.**
-5. **Domain invariants remain enforced independently of the agent runtime.**
-6. **External content and model-generated instructions are treated as untrusted input.**
-7. **Authorization fails closed when the required context or permission is missing or invalid.**
-8. **Security controls must be testable independently of the LLM wherever practical.**
-9. **Vulnerable implementations remain isolated to controlled demonstrations.**
+4. **Resource-level authorization is enforced using trusted identity and resource data in the hardened path.**
+5. **The vulnerable demonstration retains lab isolation even while omitting customer-ownership authorization.**
+6. **Domain invariants remain enforced independently of the agent runtime.**
+7. **External content and model-generated instructions are treated as untrusted input.**
+8. **Security controls fail closed when required context or permission is missing or invalid.**
+9. **Security controls must be testable independently of the LLM wherever practical.**
+10. **Vulnerable implementations remain isolated to controlled demonstrations.**
 
 These invariants are architectural requirements. Their compliance must be verified against the implementation as the project evolves.
 
@@ -389,6 +457,8 @@ These invariants are architectural requirements. Their compliance must be verifi
 Hexagonal Architecture introduces additional interfaces, adapters, and indirection compared with a simple CRUD application.
 
 That complexity is justified when it protects meaningful boundaries, such as persistence, LLM integration, authorization, and application use cases.
+
+The lab-isolation check is expressed through the repository port so the application use case can enforce this boundary without depending on Turso-specific implementation details.
 
 However, abstractions should not be introduced solely for theoretical completeness. Each abstraction should have a clear responsibility and a practical benefit for testability, change isolation, or security enforcement.
 
@@ -415,7 +485,8 @@ These are potential extensions, not claims that the corresponding capabilities a
 ## Author
 
 **Fernando Magalhães**  
-CEO – FM ByteShift Software
+CEO — FM ByteShift Software
 
-🌐 [fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)  
-🔐 [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
+[fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)
+
+[Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)

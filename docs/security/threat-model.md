@@ -38,13 +38,16 @@ The current backend includes:
 
 - A FastAPI application with authenticated order cancellation endpoints.
 - Integration with the OpenAI Agents SDK.
-- An application use case for order cancellation.
-- An authorization policy that checks whether the authenticated actor may cancel the requested order.
+- Application use cases for order cancellation.
+- An authorization policy that checks whether the authenticated actor may cancel the requested order on the hardened path.
 - A repository port and a Turso/libSQL persistence adapter.
-- A deliberately vulnerable order cancellation path that omits the resource ownership authorization check.
-- A hardened order cancellation path that checks authorization before changing the order state.
+- A deliberately vulnerable order cancellation path that omits customer ownership authorization.
+- A lab-isolation control that prevents the vulnerable path from accessing orders belonging to another lab.
+- Automated tests covering the vulnerable and hardened cancellation behaviors.
 
-The current security demonstration is **SEC-01 — BOLA / IDOR**, implemented for order cancellation.
+The current security demonstration is **SEC-01 — Broken Object Level Authorization (BOLA)**, implemented for order cancellation.
+
+The vulnerable path demonstrates unauthorized cross-customer cancellation within the same lab. It does not intentionally disable every security control.
 
 ### 2.2 Planned or Not Yet in Scope
 
@@ -56,32 +59,42 @@ A frontend, multiple cooperating agents, external content ingestion, support tic
 
 ```text
 Authenticated Client
-        │
-        ▼
+        |
+        v
      FastAPI
-        │
-        ▼
+        |
+        v
  OpenAI Agent Runtime
-        │
-        ▼
-    Tool Adapter
-        │
-        ▼
+        |
+        v
+   Tool Adapter
+        |
+        v
  Application Tool
-        │
-        ▼
-  Cancellation Use Case
-        │
-        ├── Authorization Policy (hardened path)
-        │
-        ▼
-   Order Repository Port
-        │
-        ▼
-    Turso / libSQL
+        |
+        v
+ Cancellation Use Case
+        |
+        +---- Vulnerable path
+        |       |
+        |       +---- Lab-isolation check
+        |       |
+        |       +---- Customer ownership check omitted
+        |
+        +---- Hardened path
+                |
+                +---- Customer ownership authorization
+        |
+        v
+ Order Repository Port
+        |
+        v
+   Turso / libSQL
 ```
 
-The intentionally vulnerable path uses a separate use case that omits the resource ownership authorization check. This path exists only to demonstrate the security flaw.
+The vulnerable and hardened paths intentionally differ in their customer ownership authorization behavior. Lab isolation remains enforced on the vulnerable path.
+
+The exact checks and their ordering depend on the selected use case. The security model must not imply that both paths enforce identical authorization policies.
 
 ## 3. Security Objectives
 
@@ -91,7 +104,7 @@ Users must not access customer or order information outside their authorization.
 
 ### Integrity
 
-Users and agents must not cause unauthorized state changes, such as cancelling another customer's order or bypassing required business rules.
+Users and agents must not cause unauthorized state changes, such as cancelling another customer's order through a protected endpoint or bypassing required business rules.
 
 ### Availability
 
@@ -107,20 +120,27 @@ Privileged operations must be authorized by trusted application code. Authorizat
 - user-provided claims about identity, ownership, or permission;
 - messages from another agent.
 
+### Lab Isolation
+
+Resources belonging to one lab must not be accessible through another lab's execution context.
+
+Lab isolation is a separate security boundary from customer ownership authorization. A request may be within the correct lab and still be unauthorized because the requested order belongs to another customer.
+
 ## 4. Assets
 
 The threat model considers the following assets. Not all of them are present in the current implementation.
 
-| Asset                                    | Security concern                        | Current status                       |
-| ---------------------------------------- | --------------------------------------- | ------------------------------------ |
-| Customer identity and account data       | Unauthorized access or modification     | Partially represented                |
-| Order identifiers, status, and ownership | Unauthorized access or state changes    | Implemented                          |
-| Support tickets and history              | Unauthorized disclosure or modification | Planned                              |
-| Tool definitions and capabilities        | Misuse or excessive privileges          | Order cancellation tool implemented  |
-| Authentication and authorization context | Spoofing, substitution, or misuse       | Implemented for the current API flow |
-| LLM provider credentials                 | Secret disclosure or unauthorized use   | Configuration and deployment concern |
-| Agent instructions and context           | Manipulation or disclosure              | Relevant to planned scenarios        |
-| Inter-agent messages and privileges      | Forgery or privilege escalation         | Planned                              |
+| Asset                                             | Security concern                        | Current status                       |
+| ------------------------------------------------- | --------------------------------------- | ------------------------------------ |
+| Customer identity and account data                | Unauthorized access or modification     | Partially represented                |
+| Order identifiers, status, and customer ownership | Unauthorized access or state changes    | Implemented                          |
+| Lab ownership and resource isolation              | Cross-lab access                        | Implemented for SEC-01 cancellation  |
+| Tool definitions and capabilities                 | Misuse or excessive privileges          | Order cancellation tool implemented  |
+| Authentication and authorization context          | Spoofing, substitution, or misuse       | Implemented for the current API flow |
+| LLM provider credentials                          | Secret disclosure or unauthorized use   | Configuration and deployment concern |
+| Agent instructions and context                    | Manipulation or disclosure              | Relevant to planned scenarios        |
+| Support tickets and history                       | Unauthorized disclosure or modification | Planned                              |
+| Inter-agent messages and privileges               | Forgery or privilege escalation         | Planned                              |
 
 Provider credentials must remain in server-side configuration or an appropriate secret management mechanism. They must not be exposed as user-facing application data or unnecessarily included in prompts.
 
@@ -162,7 +182,7 @@ User prompts can influence model behavior but do not grant permission. The model
 
 ### Boundary 3 — Agent to Tool and Application Use Case
 
-The agent's tool call is a request, not an authorization decision. The application must independently enforce permissions before performing a privileged operation.
+The agent's tool call is a request, not an authorization decision. The application must independently enforce the relevant security controls before performing a privileged operation.
 
 ```text
 Agent Tool Request
@@ -178,11 +198,19 @@ State Change Only If Permitted
 
 Provider responses may be incorrect, manipulated, or malformed. Validate output that influences application behavior, and do not delegate authorization or protected state changes to the model.
 
-### Boundary 5 — External Content to Agent (Planned)
+### Boundary 5 — Lab to Lab
+
+An order must not be accessible through a cancellation request originating from a different lab.
+
+For SEC-01, the vulnerable cancellation use case checks whether the requested order belongs to the authenticated actor's lab before retrieving and modifying the order. A failed check raises `EntityNotFound`, resulting in a `404 Not Found` response.
+
+This response is intended to avoid disclosing whether an order exists outside the caller's lab.
+
+### Boundary 6 — External Content to Agent (Planned)
 
 External content may contain instructions intended to manipulate the agent. Treat it as data, not as trusted application instructions.
 
-### Boundary 6 — Agent to Agent (Planned)
+### Boundary 7 — Agent to Agent (Planned)
 
 A message from one agent must not automatically grant privileges to another. The receiving component must operate with explicit, trusted identity and authorization context.
 
@@ -190,36 +218,32 @@ A message from one agent must not automatically grant privileges to another. The
 
 The catalogue includes the current SEC-01 implementation and candidate scenarios for future iterations.
 
-| ID     | Category                       | Scenario                                     | Primary Mapping                                                                                 | Status      |
-| ------ | ------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------- |
-| SEC-01 | Application Security           | BOLA / IDOR in order cancellation            | OWASP Top 10:2025 A01; CWE-639                                                                  | Implemented |
-| SEC-02 | Application and Agent Security | Broken Access Control / Excessive Privileges | OWASP Top 10:2025 A01; CWE-862 or CWE-863 when supported by the root cause                      | Planned     |
-| SEC-03 | AI and Application Security    | Sensitive Information Disclosure             | OWASP GenAI LLM Top 10:2026 LLM02                                                               | Planned     |
-| SEC-04 | Application Security           | Business Logic Violation                     | OWASP Top 10:2025 A06; CWE-841 where workflow enforcement is the cause                          | Planned     |
-| SEC-05 | AI Security                    | Direct Prompt Injection                      | OWASP GenAI LLM Top 10:2026 LLM01; OWASP Agentic Top 10:2026 ASI01 where goal hijacking applies | Planned     |
-| SEC-06 | AI Security                    | Indirect Prompt Injection                    | OWASP GenAI LLM Top 10:2026 LLM01; OWASP Agentic Top 10:2026 ASI01 where goal hijacking applies | Planned     |
-| SEC-07 | Agentic Security               | Excessive Agency                             | OWASP GenAI LLM Top 10:2026 LLM03                                                               | Planned     |
-| SEC-08 | Agentic Security               | Tool Misuse / Unauthorized Tool Invocation   | OWASP Agentic Top 10:2026 ASI02                                                                 | Planned     |
-| SEC-09 | Multi-Agent Security           | Agent-to-Agent Privilege Escalation          | OWASP Agentic Top 10:2026 ASI03; ASI07 when insecure inter-agent communication is the cause     | Planned     |
-| SEC-10 | AI and Application Security    | Improper Output Handling                     | OWASP GenAI LLM Top 10:2026 LLM10                                                               | Planned     |
+| ID     | Category                       | Scenario                                     | Primary mapping                                                                     | Status      |
+| ------ | ------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------- | ----------- |
+| SEC-01 | Application Security           | BOLA / IDOR in order cancellation            | OWASP API Security Top 10:2023 API1; OWASP Top 10:2025 A01; CWE-639                 | Implemented |
+| SEC-02 | Application and Agent Security | Broken Access Control / Excessive Privileges | OWASP Top 10:2025 A01; CWE-862 or CWE-863 when supported by the root cause          | Planned     |
+| SEC-03 | AI and Application Security    | Sensitive Information Disclosure             | OWASP GenAI LLM Top 10:2025 LLM02; verify edition before implementation             | Planned     |
+| SEC-04 | Application Security           | Business Logic Violation                     | OWASP Top 10:2025 A06; CWE-841 where workflow enforcement is the cause              | Planned     |
+| SEC-05 | AI Security                    | Direct Prompt Injection                      | OWASP GenAI LLM Top 10:2025 LLM01; agentic mappings depend on the attack            | Planned     |
+| SEC-06 | AI Security                    | Indirect Prompt Injection                    | OWASP GenAI LLM Top 10:2025 LLM01; agentic mappings depend on the attack            | Planned     |
+| SEC-07 | Agentic Security               | Excessive Agency                             | Verify the relevant OWASP GenAI and agentic taxonomy editions before implementation | Planned     |
+| SEC-08 | Agentic Security               | Tool Misuse / Unauthorized Tool Invocation   | Verify the relevant OWASP agentic taxonomy edition before implementation            | Planned     |
+| SEC-09 | Multi-Agent Security           | Agent-to-Agent Privilege Escalation          | Verify the relevant OWASP agentic taxonomy edition before implementation            | Planned     |
+| SEC-10 | AI and Application Security    | Improper Output Handling                     | Verify the relevant OWASP GenAI taxonomy edition before implementation              | Planned     |
 
 ### Taxonomy Notes
 
-This document uses OWASP Top 10:2025 for traditional application security mappings and the **OWASP GenAI LLM Top 10:2026** and **OWASP Top 10 for Agentic Applications:2026** for AI-related risks.
+Traditional application security mappings use the relevant OWASP Top 10 and API Security editions. AI-related mappings must be checked against the specific edition cited when a scenario is implemented.
 
-AI mappings must be checked against the specific edition cited when a scenario is implemented. Do not carry category identifiers forward from an older edition without verification.
-
-A CWE mapping should identify a specific weakness only when it fits the scenario's root cause. “Context-dependent” is not a CWE identifier.
-
-The OWASP Agentic Top 10 includes agent-specific risks such as goal hijacking, tool misuse, identity and privilege abuse, supply chain vulnerabilities, unexpected code execution, memory and context poisoning, insecure inter-agent communication, cascading failures, human-agent trust exploitation, and rogue agents.
+Do not carry category identifiers forward from an older edition without verification. A CWE mapping should identify a specific weakness only when it fits the scenario's root cause.
 
 The catalogue does not imply that AgenticEnclave currently implements all these risks.
 
 References:
 
 - [OWASP Top 10:2025](https://owasp.org/Top10/2025/)
-- [OWASP GenAI LLM Top 10:2026](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/)
-- [OWASP Top 10 for Agentic Applications:2026](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+- [OWASP GenAI Security Project](https://genai.owasp.org/)
+- [OWASP API Security Project](https://owasp.org/www-project-api-security/)
 
 ## 8. SEC-01 — BOLA / IDOR
 
@@ -242,26 +266,51 @@ POST /api/vulnerable/orders/cancel
 POST /api/orders/cancel
 ```
 
-The vulnerable endpoint intentionally omits the resource ownership authorization check. The hardened endpoint checks authorization before changing the order state.
+The vulnerable endpoint intentionally omits customer ownership authorization. The hardened endpoint enforces that authorization before changing the order state.
 
-### Impact
-
-The attacker may cancel another customer's order, violating order integrity and potentially causing operational or financial consequences.
+The vulnerable endpoint also enforces lab isolation. This prevents the demonstration from turning into unrestricted cross-lab access.
 
 ### Root Cause
 
 The vulnerable use case performs the requested operation without checking whether the authenticated actor is authorized to cancel the specific order.
 
+The order identifier is client-controlled input. Supplying a valid identifier must not, by itself, grant permission to modify the corresponding resource.
+
+### Impact
+
+An attacker may cancel another customer's order within the same lab, violating order integrity and potentially causing operational or financial consequences.
+
+The current scenario demonstrates unauthorized state modification. It does not claim to demonstrate unauthorized read access or every form of BOLA.
+
 ### Security Mapping
 
+- **OWASP API Security Top 10:2023:** API1 — Broken Object Level Authorization.
 - **OWASP Top 10:2025:** A01 — Broken Access Control.
-- **CWE-639:** Authorization Bypass Through User-Controlled Key, where the user-controlled order identifier is the mechanism used to access another customer's resource.
+- **CWE-639:** Authorization Bypass Through User-Controlled Key.
 
-The mapping describes the underlying authorization weakness, not merely the fact that an order identifier appears in a request.
+These mappings describe the underlying authorization weakness rather than merely the presence of an order identifier in a request.
+
+### Vulnerable and Hardened Behavior
+
+| Scenario                                            | Vulnerable endpoint                | Hardened endpoint                                    |
+| --------------------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| Cancel own order within the same lab                | Allowed when business rules permit | Allowed when authorization and business rules permit |
+| Cancel another customer's order within the same lab | Allowed to demonstrate BOLA        | Denied with `403 Forbidden`                          |
+| Cancel an order belonging to another lab            | Denied with `404 Not Found`        | Denied by resource access controls                   |
+
+### Lab-Isolation Control
+
+The vulnerable cancellation use case calls the repository's `belongs_to_lab` operation before retrieving and modifying the order.
+
+The repository checks the order ID and lab owner ID against the persisted order record.
+
+If the order does not belong to the actor's lab, the use case raises `EntityNotFound`. The order is not modified.
+
+This control is deliberately separate from customer ownership authorization. It limits the vulnerable demonstration to a single lab without fixing the intended same-lab BOLA condition.
 
 ### Hardened Design
 
-The application must evaluate the authenticated actor, the requested order, and the requested operation before changing state.
+The application evaluates the authenticated actor, the requested order, and the requested operation before changing state.
 
 ```text
 Authenticated Actor
@@ -270,7 +319,7 @@ Requested Order
         +
 Requested Operation
         ↓
-Authorization Policy
+Ownership Authorization
         ↓
 Allow or Deny
         ↓
@@ -281,19 +330,17 @@ The authorization check belongs in trusted application code. The model's tool se
 
 ### Verification
 
-Security tests must demonstrate both paths using the same cross-customer attack:
+Automated tests and manual API validation verify the following behaviors:
 
-```text
-User A → Cancel Order B through vulnerable path
-       → Operation succeeds (demonstrates the flaw)
+1. A customer can cancel another customer's order through the vulnerable path when both belong to the same lab.
+2. The vulnerable path rejects an order belonging to another lab.
+3. The hardened path rejects cancellation of another customer's order.
+4. Rejected operations leave the order's persisted status unchanged.
+5. Authorized cancellation remains possible when domain rules permit it.
 
-User A → Cancel Order B through hardened path
-       → Request is denied; order remains unchanged
-```
+The automated test suite passed with **46 tests** at the time of this documentation update.
 
-Also verify that a customer can perform the operation on an order they are authorized to cancel, subject to the domain's business rules.
-
-Tests should assert both the response and the resulting persisted state.
+The test count is a snapshot and may change as the project evolves.
 
 ## 9. Guidance for Future Scenarios
 
@@ -393,6 +440,10 @@ Enforce access decisions in trusted application code, not in client-side checks,
 
 Evaluate the actor, the specific resource, and the requested operation. A valid identity does not imply access to every resource.
 
+### Lab Isolation
+
+Constrain resource access to the authorized lab context. Lab isolation is not a replacement for resource ownership authorization.
+
 ### Tool-Level Authorization
 
 Tool registration establishes availability to the agent, not permission for every user or execution context to invoke it.
@@ -471,20 +522,21 @@ These topics are not considered implemented merely because they appear in this l
 
 ```text
 AI / Agent Layer
-       │
-       │ Requests an Action
-       ▼
+       |
+       | Requests an Action
+       v
 Trusted Application
-       │
-       ├── Validates Input
-       ├── Authenticates the Actor
-       ├── Authorizes the Operation
-       └── Invokes the Use Case
-                    │
-                    ▼
+       |
+       +---- Validates Input
+       +---- Authenticates the Actor
+       +---- Enforces Applicable Authorization
+       +---- Enforces Resource Isolation
+       +---- Invokes the Use Case
+                    |
+                    v
                Domain Rules
-                    │
-                    ▼
+                    |
+                    v
                 Persistence
 ```
 
@@ -492,7 +544,7 @@ The model reasons and proposes.
 
 The agent requests.
 
-The application authenticates and authorizes.
+The application authenticates, authorizes, and enforces resource isolation.
 
 The domain enforces business invariants.
 
@@ -503,7 +555,7 @@ This separation is the fundamental security principle of AgenticEnclave.
 ## Author
 
 **Fernando Magalhães**  
-CEO – FM ByteShift Software
+CEO — FM ByteShift Software
 
-🌐 [fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)  
-🔐 [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
+[fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)  
+[Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)

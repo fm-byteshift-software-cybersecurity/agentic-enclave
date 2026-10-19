@@ -8,13 +8,15 @@ It combines software engineering, AI agent architecture, and application securit
 
 > An AI agent may request an action. The application must decide whether that action is allowed.
 
-The LLM is not a security boundary. Authentication, authorization, and business rules must be enforced by the application independently of model instructions.
+The LLM is not a security boundary. Authentication, authorization, resource isolation, and business rules must be enforced by the application independently of model instructions.
 
 ## Project Status
 
 **Early development.**
 
-The backend foundation and the first security scenario, Broken Object Level Authorization (BOLA), are implemented. The project includes vulnerable and hardened API paths, application-level authorization, and automated security verification.
+The backend foundation and the first security scenario, Broken Object Level Authorization (BOLA), are implemented. The project includes authenticated API endpoints, vulnerable and hardened order cancellation paths, application-level security controls, lab isolation, and automated verification.
+
+The first scenario demonstrates how omitting resource ownership authorization can allow an authenticated customer to cancel another customer's order within the same lab, while a separate isolation control prevents access to orders belonging to other labs.
 
 The frontend and additional security scenarios remain under development.
 
@@ -34,7 +36,7 @@ The backend uses Python, FastAPI, the OpenAI Agents SDK, and Turso/libSQL. LLM i
 
 ### Agent Execution and Security Boundaries
 
-An agent interprets a user request and may invoke a tool. The tool delegates the operation to an application use case, where authorization and business rules are enforced before the resource is modified.
+An agent interprets a user request and may invoke a tool. The tool delegates the operation to an application use case, where the relevant security controls and business rules are enforced before the resource is modified.
 
 ```text
 User Request
@@ -48,10 +50,9 @@ Tool Invocation
      v
 Application Use Case
      |
-     v
-Authorization Policy
-     |
-     +---- Denied ----> Reject Operation
+     +---- Authorization / Isolation Checks
+     |                 |
+     |                 +---- Denied ----> Reject Operation
      |
      v
 Domain Rules
@@ -62,6 +63,8 @@ Repository Port
      v
 Database Adapter
 ```
+
+The exact checks depend on the implementation being exercised. The hardened path enforces resource ownership authorization. The vulnerable path intentionally omits that ownership check for the security demonstration, while retaining the lab-isolation control.
 
 The model may select an operation and supply its arguments, but it cannot grant itself permission to execute that operation. Security enforcement remains in application-controlled code.
 
@@ -81,23 +84,58 @@ The goal is to make the vulnerability, root cause, mitigation, and security boun
 
 BOLA occurs when an application allows a user to access or modify a resource without properly verifying that the user is authorized to perform the requested operation on that specific resource.
 
-In AgenticEnclave, the vulnerable cancellation path omits resource ownership authorization. The hardened path checks the actor's permission against the order owner before allowing cancellation.
+In AgenticEnclave, SEC-01 demonstrates the consequences of omitting resource ownership authorization from an order cancellation operation.
 
-| Component            | Responsibility                                                     |
-| -------------------- | ------------------------------------------------------------------ |
-| Vulnerable use case  | Demonstrates cancellation without resource ownership authorization |
-| Hardened use case    | Enforces authorization before modifying the order                  |
-| Authorization policy | Evaluates whether the actor may perform the requested operation    |
-| Integration tests    | Verify API behavior and security enforcement                       |
+The vulnerable cancellation path allows an authenticated customer to cancel another customer's order **within the same lab**. This reproduces the BOLA condition in a controlled environment.
 
-**Endpoints**
+The hardened path enforces customer ownership authorization before allowing cancellation.
+
+A separate lab-isolation control applies to the vulnerable path as well. An order belonging to another lab is rejected, even when the request targets an otherwise valid order ID. This keeps the demonstration scoped to the intended security boundary.
+
+#### Security Controls
+
+| Component                        | Responsibility                                                              |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| Vulnerable cancellation use case | Demonstrates cancellation without customer ownership authorization          |
+| Hardened cancellation use case   | Enforces authorization against the order owner                              |
+| Lab-isolation check              | Prevents the vulnerable path from accessing orders belonging to another lab |
+| Repository port                  | Defines the persistence operations and lab-membership contract              |
+| Database adapter                 | Implements order retrieval, persistence, and lab-membership checks          |
+| Integration tests                | Verify the observable API behavior and security boundaries                  |
+
+#### Endpoints
 
 - Hardened: `POST /api/orders/cancel`
 - Vulnerable: `POST /api/vulnerable/orders/cancel`
 
 Both endpoints require authentication. Authentication establishes the caller's identity; it does not automatically authorize access to every resource.
 
-The vulnerable endpoint is intentionally insecure and exists exclusively for controlled security demonstrations. It is not intended for production use.
+The vulnerable endpoint intentionally omits customer ownership authorization, but it is not completely unrestricted: lab isolation remains enforced. This distinction is essential to understanding the scope of the demonstration.
+
+The vulnerable endpoint exists exclusively for controlled security demonstrations. It is not intended for production use.
+
+#### Expected Behavior
+
+| Scenario                                                | Vulnerable endpoint                                  | Hardened endpoint                                    |
+| ------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
+| Cancel an order belonging to the authenticated customer | Allowed, subject to lab isolation and business rules | Allowed, subject to authorization and business rules |
+| Cancel another customer's order in the same lab         | Allowed to demonstrate BOLA                          | Rejected with `403 Forbidden`                        |
+| Cancel an order belonging to another lab                | Rejected with `404 Not Found`                        | Rejected by resource access controls                 |
+
+The `404 Not Found` response for an order outside the caller's lab avoids disclosing whether that order exists in another lab.
+
+#### Verification
+
+The scenario is verified through automated tests and manual API testing.
+
+The test suite checks the vulnerable same-lab cancellation behavior, rejection of cross-lab access, and the hardened ownership control. The API-level checks also verify that rejected operations do not change the order's status.
+
+The security demonstration therefore distinguishes two separate controls:
+
+1. **Resource ownership authorization:** Prevents one customer from modifying another customer's order.
+2. **Lab isolation:** Prevents access to resources outside the caller's lab.
+
+These controls address different boundaries and must not be treated as interchangeable.
 
 ## Security Engineering Approach
 
@@ -118,7 +156,14 @@ Planned areas of investigation include additional authorization weaknesses, exce
 
 Automated tests verify application behavior and security controls independently of the LLM wherever practical.
 
-Testing covers application logic, API behavior, authorization decisions, and security scenarios. Deterministic test doubles are used where appropriate, while manual API validation can exercise the real agent runtime.
+Testing covers application logic, API behavior, authorization decisions, repository contracts, and security scenarios. Deterministic test doubles are used where appropriate, while manual API validation can exercise the running application and its configured database.
+
+The SEC-01 tests cover:
+
+- BOLA reproduction through the vulnerable cancellation endpoint.
+- Rejection of cross-lab order access.
+- Ownership enforcement through the hardened endpoint.
+- Preservation of order state when a cancellation request is rejected.
 
 A successful model response alone is not considered evidence that an operation is secure. Verification must establish whether the application actually enforced the required security controls.
 
