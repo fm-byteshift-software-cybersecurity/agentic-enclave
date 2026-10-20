@@ -18,6 +18,8 @@ The backend foundation and the first security scenario, Broken Object Level Auth
 
 The first scenario demonstrates how omitting resource ownership authorization can allow an authenticated customer to cancel another customer's order within the same lab, while a separate isolation control prevents access to orders belonging to other labs.
 
+The SEC-01 backend also provides authenticated endpoints for listing a lab's orders and resetting their statuses for repeatable security demonstrations.
+
 The frontend and additional security scenarios remain under development.
 
 ## Architecture
@@ -51,8 +53,8 @@ Tool Invocation
 Application Use Case
      |
      +---- Authorization / Isolation Checks
-     |                 |
-     |                 +---- Denied ----> Reject Operation
+     |                  |
+     |                  +---- Denied ----> Reject Operation
      |
      v
 Domain Rules
@@ -92,29 +94,37 @@ The hardened path enforces customer ownership authorization before allowing canc
 
 A separate lab-isolation control applies to the vulnerable path as well. An order belonging to another lab is rejected, even when the request targets an otherwise valid order ID. This keeps the demonstration scoped to the intended security boundary.
 
-#### Security Controls
+### Security Controls
 
 | Component                        | Responsibility                                                              |
 | -------------------------------- | --------------------------------------------------------------------------- |
 | Vulnerable cancellation use case | Demonstrates cancellation without customer ownership authorization          |
 | Hardened cancellation use case   | Enforces authorization against the order owner                              |
 | Lab-isolation check              | Prevents the vulnerable path from accessing orders belonging to another lab |
-| Repository port                  | Defines the persistence operations and lab-membership contract              |
-| Database adapter                 | Implements order retrieval, persistence, and lab-membership checks          |
-| Integration tests                | Verify the observable API behavior and security boundaries                  |
+| Repository port                  | Defines persistence operations and the lab-membership contract              |
+| Database adapter                 | Implements order retrieval, persistence, listing, and lab-membership checks |
+| Lab orders endpoint              | Lists orders associated with the authenticated lab                          |
+| Lab reset endpoint               | Resets order statuses within the authenticated lab                          |
+| Automated tests                  | Verify application behavior and security boundaries                         |
 
-#### Endpoints
+### Endpoints
 
-- Hardened: `POST /api/orders/cancel`
-- Vulnerable: `POST /api/vulnerable/orders/cancel`
+| Method | Endpoint                        | Purpose                                        |
+| ------ | ------------------------------- | ---------------------------------------------- |
+| POST   | `/api/orders/cancel`            | Hardened order cancellation                    |
+| POST   | `/api/vulnerable/orders/cancel` | Vulnerable order cancellation demonstration    |
+| GET    | `/api/lab/sec-01/orders`        | List orders belonging to the authenticated lab |
+| POST   | `/api/lab/sec-01/reset`         | Reset the authenticated lab's order statuses   |
 
-Both endpoints require authentication. Authentication establishes the caller's identity; it does not automatically authorize access to every resource.
+All four endpoints require authentication.
 
-The vulnerable endpoint intentionally omits customer ownership authorization, but it is not completely unrestricted: lab isolation remains enforced. This distinction is essential to understanding the scope of the demonstration.
+The lab endpoints derive the lab owner identifier from the authenticated user's identity. They do not rely on a caller-supplied lab identifier to determine which lab's orders to access or reset.
+
+The vulnerable cancellation endpoint intentionally omits customer ownership authorization, but it is not completely unrestricted: lab isolation remains enforced. This distinction is essential to understanding the scope of the demonstration.
 
 The vulnerable endpoint exists exclusively for controlled security demonstrations. It is not intended for production use.
 
-#### Expected Behavior
+### Expected Behavior
 
 | Scenario                                                | Vulnerable endpoint                                  | Hardened endpoint                                    |
 | ------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
@@ -124,13 +134,44 @@ The vulnerable endpoint exists exclusively for controlled security demonstration
 
 The `404 Not Found` response for an order outside the caller's lab avoids disclosing whether that order exists in another lab.
 
-#### Verification
+### Lab Order Management
+
+The SEC-01 lab endpoints support repeatable testing and demonstrations.
+
+**Listing**
+
+`GET /api/lab/sec-01/orders` returns the orders associated with the authenticated user's lab, including their IDs, customer IDs, and current statuses.
+
+The repository query filters by `lab_owner_id`, keeping the listing scoped to that lab rather than relying on customer ownership or the `is_demo` flag.
+
+**Reset**
+
+`POST /api/lab/sec-01/reset` sets the status of every order belonging to the authenticated user's lab to `pending`.
+
+The operation updates existing records. It does not delete or recreate orders, so order IDs and other fields remain unchanged.
+
+The reset is scoped by `lab_owner_id`, and the identifier is derived from the authenticated user. Resetting one lab must not change the orders belonging to another lab.
+
+The reset endpoint is a lab-management operation, not part of the BOLA exploit itself.
+
+### Verification
 
 The scenario is verified through automated tests and manual API testing.
 
-The test suite checks the vulnerable same-lab cancellation behavior, rejection of cross-lab access, and the hardened ownership control. The API-level checks also verify that rejected operations do not change the order's status.
+The verified behavior includes:
 
-The security demonstration therefore distinguishes two separate controls:
+- The vulnerable path permits same-lab cross-customer cancellation.
+- Cross-lab cancellation requests are rejected by the vulnerable path.
+- The hardened path rejects unauthorized cross-customer cancellation with `403 Forbidden`.
+- Rejected cancellation operations preserve the order's state.
+- The lab listing is scoped to the authenticated lab owner.
+- The reset operation changes orders in the selected lab to `pending` without recreating records.
+
+The automated test suite has passed **46 tests** at the current documented checkpoint. Manual API validation has also confirmed the lab listing and reset behavior.
+
+This count represents the test suite at that checkpoint and should be updated when the suite changes.
+
+The security demonstration distinguishes two separate controls:
 
 1. **Resource ownership authorization:** Prevents one customer from modifying another customer's order.
 2. **Lab isolation:** Prevents access to resources outside the caller's lab.
@@ -156,14 +197,16 @@ Planned areas of investigation include additional authorization weaknesses, exce
 
 Automated tests verify application behavior and security controls independently of the LLM wherever practical.
 
-Testing covers application logic, API behavior, authorization decisions, repository contracts, and security scenarios. Deterministic test doubles are used where appropriate, while manual API validation can exercise the running application and its configured database.
+Testing covers application logic, API behavior, authorization decisions, repository contracts, and security scenarios. Deterministic test doubles are used where appropriate, while manual API validation exercises the running application and its configured database.
 
-The SEC-01 tests cover:
+The SEC-01 verification includes:
 
 - BOLA reproduction through the vulnerable cancellation endpoint.
 - Rejection of cross-lab order access.
 - Ownership enforcement through the hardened endpoint.
 - Preservation of order state when a cancellation request is rejected.
+- Lab-scoped order listing.
+- Lab-scoped reset behavior.
 
 A successful model response alone is not considered evidence that an operation is secure. Verification must establish whether the application actually enforced the required security controls.
 
@@ -193,12 +236,10 @@ The vulnerable implementations are deliberately insecure and must not be deploye
 - **Frontend:** Build an interface for demonstrating attacks and mitigations.
 - **Documentation:** Maintain architecture decisions, threat modeling, and technical records for implemented scenarios.
 
----
-
 ## Author
 
 **Fernando Magalhães**  
-CEO – FM ByteShift Software
+CEO, FM ByteShift Software
 
-🌐 [fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)  
-🔐 [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
+- [FM ByteShift Software](https://fmbyteshiftsoftware.com/)
+- [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)

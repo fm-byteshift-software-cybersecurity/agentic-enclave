@@ -183,22 +183,14 @@ async def list_lab_orders(
 @app.post("/api/lab/sec-01/reset")
 async def reset_lab_orders(
     user: Annotated[User, Depends(get_authenticated_user)],
-) -> dict[str, str | list[dict[str, str | int]]]:
+) -> dict[str, str]:
     repository = app.state.order_repository
     use_case = ResetDemoOrdersUseCase(repository)
 
-    orders = use_case.execute(lab_owner_id=user.id)
+    use_case.execute(lab_owner_id=user.id)
 
     return {
-        "message": "Demo orders reset successfully.",
-        "orders": [
-            {
-                "id": order.id,
-                "customer_id": order.customer_id,
-                "status": order.status.value,
-            }
-            for order in orders
-        ],
+        "message": "Lab orders reset successfully.",
     }
 
 

@@ -131,8 +131,12 @@ Current responsibilities include:
 - Defining application tool contracts
 - Accessing persistence through repository ports
 - Enforcing lab isolation in the vulnerable demonstration flow
+- Listing orders belonging to the authenticated user's lab
+- Resetting the status of orders belonging to the authenticated user's lab to `pending`, without deleting or recreating records
 
 The implemented cancellation flow includes `CancelOrderUseCase`, `VulnerableCancelOrderUseCase`, the relevant cancellation tools, `AuthorizationPolicy`, `Actor`, `Permission`, and `OrderRepository`.
+
+The lab-management operations use the authenticated user's lab ownership context to scope listing and reset operations. The application must not rely on an arbitrary lab owner identifier supplied by the client or LLM to determine which orders can be listed or modified.
 
 The hardened and vulnerable use cases intentionally enforce different security rules. This difference is required to demonstrate BOLA and its mitigation.
 
@@ -203,7 +207,7 @@ Authenticated HTTP Request
        Application Tool
             │
             ▼
-        Use Case
+          Use Case
             │
             ▼
       OrderRepository
@@ -239,7 +243,7 @@ Authenticated Actor
     Order Lookup
         │
         ▼
- Authorization Policy
+  Authorization Policy
         │
         ├── Denied → AuthorizationDenied
         │
@@ -270,7 +274,7 @@ VulnerableCancelOrderTool
 VulnerableCancelOrderUseCase
         │
         ▼
- belongs_to_lab(order_id, actor.user_id)
+belongs_to_lab(order_id, actor.user_id)
         │
         ├── False → EntityNotFound → HTTP 404
         │
@@ -297,6 +301,8 @@ Returning `EntityNotFound` for an order outside the actor's lab avoids exposing 
 ### 7.3 Trusted Context
 
 The lab owner identifier is derived from the authenticated actor's application context. It must not be accepted as an arbitrary identity supplied by the LLM.
+
+The lab order listing and reset operations follow the same boundary: they use the authenticated user's `lab_owner_id` to determine which orders may be listed or modified. Neither operation accepts a caller-supplied lab owner identifier to determine the scope of access or modification.
 
 Authentication establishes identity; it does not automatically grant access to every resource.
 

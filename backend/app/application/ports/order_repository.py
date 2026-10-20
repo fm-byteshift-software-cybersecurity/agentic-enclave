@@ -15,16 +15,12 @@ class OrderRepository(ABC):
 
     @abstractmethod
     def list_demo_orders(self, lab_owner_id: int) -> list[Order]:
-        """Return only demo orders owned by the specified lab user."""
+        """Return all orders belonging to the specified lab."""
         pass
 
     @abstractmethod
-    def reset_demo_orders(
-        self,
-        lab_owner_id: int,
-        orders: list[Order],
-    ) -> list[Order]:
-        """Atomically replace a user's demo orders and return their generated IDs."""
+    def reset_demo_orders(self, lab_owner_id: int) -> None:
+        """Reset all orders belonging to the specified lab to pending."""
         pass
 
     @abstractmethod

@@ -43,6 +43,8 @@ The current backend includes:
 - A repository port and a Turso/libSQL persistence adapter.
 - A deliberately vulnerable order cancellation path that omits customer ownership authorization.
 - A lab-isolation control that prevents the vulnerable path from accessing orders belonging to another lab.
+- Authenticated lab order listing and reset endpoints.
+- A reset operation that updates existing orders belonging to the authenticated lab owner to `pending`, without deleting or recreating records.
 - Automated tests covering the vulnerable and hardened cancellation behaviors.
 
 The current security demonstration is **SEC-01 — Broken Object Level Authorization (BOLA)**, implemented for order cancellation.
@@ -70,7 +72,7 @@ Authenticated Client
    Tool Adapter
         |
         v
- Application Tool
+  Application Tool
         |
         v
  Cancellation Use Case
@@ -95,6 +97,8 @@ Authenticated Client
 The vulnerable and hardened paths intentionally differ in their customer ownership authorization behavior. Lab isolation remains enforced on the vulnerable path.
 
 The exact checks and their ordering depend on the selected use case. The security model must not imply that both paths enforce identical authorization policies.
+
+The lab order listing and reset endpoints are separate lab-management operations. Both derive the lab owner ID from the authenticated user's identity. The listing operation returns orders belonging to that lab, while the reset operation updates their status to `pending` without deleting or recreating the records.
 
 ## 3. Security Objectives
 
@@ -130,17 +134,17 @@ Lab isolation is a separate security boundary from customer ownership authorizat
 
 The threat model considers the following assets. Not all of them are present in the current implementation.
 
-| Asset                                             | Security concern                        | Current status                       |
-| ------------------------------------------------- | --------------------------------------- | ------------------------------------ |
-| Customer identity and account data                | Unauthorized access or modification     | Partially represented                |
-| Order identifiers, status, and customer ownership | Unauthorized access or state changes    | Implemented                          |
-| Lab ownership and resource isolation              | Cross-lab access                        | Implemented for SEC-01 cancellation  |
-| Tool definitions and capabilities                 | Misuse or excessive privileges          | Order cancellation tool implemented  |
-| Authentication and authorization context          | Spoofing, substitution, or misuse       | Implemented for the current API flow |
-| LLM provider credentials                          | Secret disclosure or unauthorized use   | Configuration and deployment concern |
-| Agent instructions and context                    | Manipulation or disclosure              | Relevant to planned scenarios        |
-| Support tickets and history                       | Unauthorized disclosure or modification | Planned                              |
-| Inter-agent messages and privileges               | Forgery or privilege escalation         | Planned                              |
+| Asset                                             | Security concern                        | Current status                                               |
+| ------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
+| Customer identity and account data                | Unauthorized access or modification     | Partially represented                                        |
+| Order identifiers, status, and customer ownership | Unauthorized access or state changes    | Implemented                                                  |
+| Lab ownership and resource isolation              | Cross-lab access                        | Implemented for SEC-01 cancellation and lab order management |
+| Tool definitions and capabilities                 | Misuse or excessive privileges          | Order cancellation tool implemented                          |
+| Authentication and authorization context          | Spoofing, substitution, or misuse       | Implemented for the current API flow                         |
+| LLM provider credentials                          | Secret disclosure or unauthorized use   | Configuration and deployment concern                         |
+| Agent instructions and context                    | Manipulation or disclosure              | Relevant to planned scenarios                                |
+| Support tickets and history                       | Unauthorized disclosure or modification | Planned                                                      |
+| Inter-agent messages and privileges               | Forgery or privilege escalation         | Planned                                                      |
 
 Provider credentials must remain in server-side configuration or an appropriate secret management mechanism. They must not be exposed as user-facing application data or unnecessarily included in prompts.
 
@@ -205,6 +209,8 @@ An order must not be accessible through a cancellation request originating from 
 For SEC-01, the vulnerable cancellation use case checks whether the requested order belongs to the authenticated actor's lab before retrieving and modifying the order. A failed check raises `EntityNotFound`, resulting in a `404 Not Found` response.
 
 This response is intended to avoid disclosing whether an order exists outside the caller's lab.
+
+The same lab-isolation boundary applies to lab order management. The listing endpoint filters orders by `lab_owner_id`, and the reset endpoint updates only orders matching that identifier. Both endpoints derive the lab owner ID from the authenticated user's identity rather than accepting it as a caller-controlled parameter.
 
 ### Boundary 6 — External Content to Agent (Planned)
 
@@ -338,9 +344,9 @@ Automated tests and manual API validation verify the following behaviors:
 4. Rejected operations leave the order's persisted status unchanged.
 5. Authorized cancellation remains possible when domain rules permit it.
 
-The automated test suite passed with **46 tests** at the time of this documentation update.
+The lab order listing and reset endpoints were also validated manually through the API. The listing operation returns orders belonging to the authenticated lab owner, and the reset operation changes those orders to `pending` without deleting or recreating records.
 
-The test count is a snapshot and may change as the project evolves.
+The automated test suite passed with **46 tests** at the last verified checkpoint. The test count is a snapshot and may change as the project evolves.
 
 ## 9. Guidance for Future Scenarios
 
@@ -477,6 +483,8 @@ Where practical, tests should verify:
 - that the hardened behavior remains enforced after later changes.
 
 Use unit tests for domain and application rules, integration tests for API and persistence behavior, and adversarial tests for the specific attack path. Manual testing can supplement automated coverage but should not replace repeatable regression tests.
+
+For lab-scoped operations, verification should also establish that a user cannot list or reset another lab's orders by manipulating request data. Reset tests should confirm that existing order IDs and non-status fields remain unchanged and that orders belonging to other labs are unaffected.
 
 The vulnerable implementation exists only to demonstrate the security flaw in a controlled environment. It must remain clearly separated from the hardened path and must not be presented as suitable for production use.
 

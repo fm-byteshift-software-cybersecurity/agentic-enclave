@@ -19,7 +19,7 @@ AgenticEnclave demonstrates this weakness through paired vulnerable and hardened
 
 OWASP recommends checking object-level authorization whenever an API operation accesses a resource using an identifier supplied by the client.
 
-Reference: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
+Reference: [https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
 
 ## 2. Security Objective
 
@@ -105,6 +105,8 @@ The distinction between `customer_id` and `lab_owner_id` is essential.
 A customer can encounter another customer's order within the same lab in the vulnerable scenario. However, the lab-isolation control must prevent the same execution context from accessing orders belonging to another lab.
 
 The lab-isolation check is an additional security boundary. It does not replace customer ownership authorization in the hardened implementation.
+
+The same lab ownership boundary applies to the lab order management endpoints. The listing operation filters orders by the authenticated user's `lab_owner_id`, and the reset operation updates only orders matching that identifier. Neither operation accepts a caller-supplied lab owner ID to determine the scope of access or modification.
 
 ## 7. Attack Scenario
 
@@ -245,7 +247,7 @@ The lab-isolation control limits the scope of this specific demonstration. It do
 
 This classification addresses APIs that use client-supplied object identifiers without verifying the caller's authorization for the requested object.
 
-Reference: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/
+Reference: [https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)
 
 ### OWASP Top 10:2025
 
@@ -253,7 +255,7 @@ Reference: https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-le
 
 This is the broader application security category covering authorization failures.
 
-Reference: https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/
+Reference: [https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/](https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/)
 
 ### CWE-639
 
@@ -261,7 +263,7 @@ Reference: https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/
 
 This mapping applies when a user-controlled identifier is used to bypass authorization and access or modify another user's record.
 
-Reference: https://cwe.mitre.org/data/definitions/639.html
+Reference: [https://cwe.mitre.org/data/definitions/639.html](https://cwe.mitre.org/data/definitions/639.html)
 
 ## 11. Hardened Design
 
@@ -407,6 +409,8 @@ The current implementation includes:
 - A hardened cancellation path that enforces customer ownership authorization.
 - Automated tests for API behavior and security boundaries.
 - Manual API validation through Swagger.
+
+The lab order listing and reset endpoints were also validated manually through the API. The listing endpoint returns orders scoped to the authenticated lab owner, and the reset endpoint changes those orders to `pending` without deleting or recreating records.
 
 The full automated test suite passed with **46 tests** at the time of this documentation update.
 
