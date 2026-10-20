@@ -82,7 +82,6 @@ function HeroPreview() {
   return (
     <div className="relative mx-auto w-full max-w-xl">
       <div className="absolute -inset-5 rounded-3xl bg-emerald-400/[0.04] blur-3xl" />
-
       <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0c1119] shadow-2xl shadow-black/40">
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div className="flex items-center gap-3">
@@ -104,24 +103,30 @@ function HeroPreview() {
         </div>
 
         <div className="space-y-4 p-5 sm:p-6">
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
-            <div className="mb-3 flex items-center gap-2 text-xs text-slate-400">
-              <LockKeyhole size={14} />
-              Authenticated request
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-5">
+            <div className="mb-4 flex items-center gap-2 text-sm text-slate-400">
+              <LockKeyhole size={16} />
+              Security scenario
             </div>
-            <div className="space-y-2 font-mono text-xs sm:text-sm">
-              <p className="text-slate-400">
-                actor <span className="text-slate-200">customer_101</span>
-              </p>
-              <p className="text-slate-400">
-                action <span className="text-slate-200">cancel_order</span>
-              </p>
-              <p className="text-slate-400">
-                target <span className="text-amber-300">order_204</span>
-              </p>
+
+            <div className="space-y-3">
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3">
+                <p className="text-sm font-medium text-white">Alice</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  Is signed in to her own account.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3">
+                <p className="text-sm font-medium text-white">Bob's Order</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  This order belongs to Bob's account, not Alice's.
+                </p>
+              </div>
             </div>
-            <p className="mt-3 border-t border-white/[0.06] pt-3 text-xs leading-relaxed text-slate-500">
-              The target order belongs to a different customer.
+
+            <p className="mt-4 border-t border-white/[0.06] pt-4 text-sm font-medium leading-relaxed text-slate-200">
+              Should the agent allow Alice to cancel this order?
             </p>
           </div>
 
@@ -223,7 +228,6 @@ export default function LandingPage() {
       setAuthStatus("unauthenticated");
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        // The session is already invalid, so the user is effectively logged out.
         setAuthStatus("unauthenticated");
       } else {
         setLogoutError(
@@ -344,9 +348,10 @@ export default function LandingPage() {
               </h1>
 
               <p className="mt-7 max-w-xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
-                Rushing to adopt AI agents without testing their security can
-                expose data, operations, and customer trust. Discover how
-                vulnerabilities happen and see what effective controls change.
+                Rushing to deploy AI agents without testing their security can
+                expose data, enable unauthorized actions, and put customer trust
+                at risk. Reproduce real attack scenarios and compare vulnerable
+                implementations with effective security controls.
               </p>
 
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -360,6 +365,7 @@ export default function LandingPage() {
                     <ArrowRight size={17} />
                   </a>
                 </Button>
+
                 <Button
                   asChild
                   size="lg"
@@ -408,6 +414,7 @@ export default function LandingPage() {
                 </p>
               </div>
             </div>
+
             <div className="flex gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
                 <ShieldAlert size={18} className="text-amber-300" />
@@ -422,6 +429,7 @@ export default function LandingPage() {
                 </p>
               </div>
             </div>
+
             <div className="flex gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
                 <Code2 size={18} className="text-sky-300" />
@@ -450,8 +458,9 @@ export default function LandingPage() {
                 Find the failure before it reaches production.
               </h2>
               <p className="mt-4 max-w-xl leading-7 text-slate-400">
-                Explore specific weaknesses, reproduce the attack, and compare
-                the vulnerable behavior with the hardened implementation.
+                Reproduce specific attack scenarios and compare vulnerable
+                behavior with the hardened implementation. Inspect the results
+                to see what the security controls actually change.
               </p>
             </div>
             <span className="flex items-center gap-2 text-sm text-slate-500">
@@ -589,6 +598,7 @@ export default function LandingPage() {
         <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24">
           <div className="relative overflow-hidden rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.045] px-6 py-10 sm:px-10 sm:py-12 lg:px-14">
             <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-emerald-300/[0.07] blur-3xl" />
+
             <div className="relative flex flex-col justify-between gap-8 md:flex-row md:items-center">
               <div className="max-w-2xl">
                 <SectionLabel>Before you scale</SectionLabel>
@@ -600,13 +610,15 @@ export default function LandingPage() {
                   stronger controls into AI-powered systems.
                 </p>
               </div>
+
               <Button
                 asChild
                 size="lg"
                 className="h-12 shrink-0 rounded-lg bg-emerald-300 px-5 font-semibold text-[#08110e] hover:bg-emerald-200"
               >
                 <a href="#scenarios">
-                  Explore the lab <ArrowDownRight size={17} />
+                  Test your agent's security boundaries.
+                  <ArrowDownRight size={17} />
                 </a>
               </Button>
             </div>
@@ -617,9 +629,31 @@ export default function LandingPage() {
       <footer className="border-t border-white/[0.07]">
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-7 sm:px-8 md:flex-row md:items-center md:justify-between">
           <Brand />
-          <p className="text-xs leading-5 text-slate-500">
-            A security engineering project by FM ByteShift Software.
-          </p>
+
+          <div className="max-w-md text-xs leading-5 text-slate-500">
+            <p>
+              A security research lab by{" "}
+              <a
+                href="https://cybersecuritypainintelligence.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-400 transition hover:text-white"
+              >
+                Cybersecurity Pain Intelligence (CPI)
+              </a>
+              , a division of{" "}
+              <a
+                href="https://fmbyteshiftsoftware.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-400 transition hover:text-white"
+              >
+                FM ByteShift Software
+              </a>
+              .
+            </p>
+          </div>
+
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <a href="#approach" className="transition hover:text-white">
               About
