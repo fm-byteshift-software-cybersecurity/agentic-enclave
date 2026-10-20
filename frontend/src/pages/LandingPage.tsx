@@ -78,106 +78,97 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+
 function HeroPreview() {
   return (
     <div className="relative mx-auto w-full max-w-xl">
       <div className="absolute -inset-5 rounded-3xl bg-emerald-400/[0.04] blur-3xl" />
+
       <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0c1119] shadow-2xl shadow-black/40">
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-lg bg-white/[0.05] text-slate-300">
-              <Terminal size={18} />
+              <Workflow size={18} />
             </div>
             <div>
               <p className="text-sm font-medium text-white">
-                Security scenario
+                AI Agent Security
               </p>
               <p className="mt-0.5 text-xs text-slate-500">
-                SEC-01 / BOLA
+                Application security boundary
               </p>
             </div>
           </div>
           <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-2.5 py-1 text-[10px] font-medium text-emerald-300">
-            DEMO PREVIEW
+            CONCEPT
           </span>
         </div>
 
         <div className="space-y-4 p-5 sm:p-6">
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-5">
-            <div className="mb-4 flex items-center gap-2 text-sm text-slate-400">
-              <LockKeyhole size={16} />
-              Security scenario
-            </div>
-
-            <div className="space-y-3">
-              <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3">
-                <p className="text-sm font-medium text-white">Alice</p>
-                <p className="mt-1 text-sm text-slate-400">
-                  Is signed in to her own account.
-                </p>
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-400/[0.07] text-sky-300">
+                <Workflow size={19} />
               </div>
-
-              <div className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3">
-                <p className="text-sm font-medium text-white">Bob's Order</p>
-                <p className="mt-1 text-sm text-slate-400">
-                  This order belongs to Bob's account, not Alice's.
+              <div>
+                <p className="text-sm font-medium text-white">
+                  AI agent
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Requests an action
                 </p>
               </div>
             </div>
-
-            <p className="mt-4 border-t border-white/[0.06] pt-4 text-sm font-medium leading-relaxed text-slate-200">
-              Should the agent allow Alice to cancel this order?
-            </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-red-400/20 bg-red-400/[0.04] p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <ShieldAlert size={16} className="text-red-300" />
-                <span className="text-xs font-medium text-slate-200">
-                  Vulnerable
-                </span>
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="h-4 w-px bg-white/15" />
+            <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-slate-500">
+              Security boundary
+            </span>
+            <div className="h-4 w-px bg-white/15" />
+          </div>
+
+          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] p-4">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-300">
+                <ShieldCheck size={19} />
               </div>
-              <p className="font-mono text-2xl font-semibold text-red-300">
-                200 OK
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                Unauthorized cancellation succeeds.
-              </p>
-              <div className="mt-4 flex items-center gap-1.5 text-[11px] font-medium text-red-300">
-                <ArrowUpRight size={13} />
-                Unauthorized action
+              <div>
+                <p className="text-sm font-medium text-white">
+                  Application
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Enforces security rules
+                </p>
               </div>
             </div>
 
-            <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <ShieldCheck size={16} className="text-emerald-300" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.05] p-3">
+                <Check size={16} className="shrink-0 text-emerald-300" />
                 <span className="text-xs font-medium text-slate-200">
-                  Hardened
+                  Allowed
                 </span>
               </div>
-              <p className="font-mono text-2xl font-semibold text-emerald-300">
-                403
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                Authorization policy blocks the action.
-              </p>
-              <div className="mt-4 flex items-center gap-1.5 text-[11px] font-medium text-emerald-300">
-                <Check size={13} />
-                Order remains unchanged
+              <div className="flex items-center gap-2 rounded-lg border border-red-400/15 bg-red-400/[0.04] p-3">
+                <ShieldAlert size={16} className="shrink-0 text-red-300" />
+                <span className="text-xs font-medium text-slate-200">
+                  Blocked
+                </span>
               </div>
             </div>
           </div>
 
           <p className="text-center text-[10px] text-slate-600">
-            Illustrative results · No live API request
+            Conceptual illustration · No live request
           </p>
         </div>
       </div>
     </div>
   );
 }
+
 
 export default function LandingPage() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
