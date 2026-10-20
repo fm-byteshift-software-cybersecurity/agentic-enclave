@@ -303,3 +303,7 @@ async def cancel_order_vulnerable(
         runtime=runtime,
         repository=repository,
     )
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
