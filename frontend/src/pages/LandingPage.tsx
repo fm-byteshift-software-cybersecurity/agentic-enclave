@@ -266,7 +266,7 @@ export default function LandingPage() {
               <>
                 <Link
                   to="/signin"
-                  className="hidden text-sm text-slate-300 transition hover:text-white sm:inline-flex"
+                  className="inline-flex text-sm text-slate-300 transition hover:text-white"
                 >
                   Sign in
                 </Link>
