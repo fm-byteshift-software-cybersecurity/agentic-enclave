@@ -12,7 +12,7 @@ The LLM is not a security boundary. Authentication, authorization, resource isol
 
 ## Project Status
 
-**Early development.**
+**Early development — initial frontend and backend deployed.**
 
 The backend foundation and the first security scenario, Broken Object Level Authorization (BOLA), are implemented. The project includes authenticated API endpoints, vulnerable and hardened order cancellation paths, application-level security controls, lab isolation, and automated verification.
 
@@ -20,7 +20,24 @@ The first scenario demonstrates how omitting resource ownership authorization ca
 
 The SEC-01 backend also provides authenticated endpoints for listing a lab's orders and resetting their statuses for repeatable security demonstrations.
 
-The frontend and additional security scenarios remain under development.
+The frontend is implemented and deployed through Cloudflare Pages, and the backend API is deployed through Render. Login has been confirmed to work in the deployed environment following a CORS configuration correction. Additional frontend validation and integration testing remain ongoing.
+
+Additional security scenarios remain under development.
+
+## Deployment
+
+The current deployment uses the following services:
+
+| Component   | Provider         | Address                                                                                                        |
+| ----------- | ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| Frontend    | Cloudflare Pages | [agentic-enclave.cybersecuritypainintelligence.com](https://agentic-enclave.cybersecuritypainintelligence.com) |
+| Backend API | Render           | [agentic-enclave-api.onrender.com](https://agentic-enclave-api.onrender.com)                                   |
+
+The frontend uses a custom domain managed through Cloudflare DNS. The backend continues to use its Render-provided hostname.
+
+The frontend and backend are deployed independently. Cross-origin requests are controlled through the backend's CORS configuration.
+
+Deployment availability does not, by itself, establish that every application feature or security scenario has been validated in production.
 
 ## Architecture
 
@@ -167,7 +184,7 @@ The verified behavior includes:
 - The lab listing is scoped to the authenticated lab owner.
 - The reset operation changes orders in the selected lab to `pending` without recreating records.
 
-The automated test suite has passed **46 tests** at the current documented checkpoint. Manual API validation has also confirmed the lab listing and reset behavior.
+The automated test suite has passed **46 tests** at the documented checkpoint. Manual API validation has also confirmed the lab listing and reset behavior.
 
 This count represents the test suite at that checkpoint and should be updated when the suite changes.
 
@@ -212,16 +229,16 @@ A successful model response alone is not considered evidence that an operation i
 
 ## Technology Stack
 
-| Component       | Technology                    |
-| --------------- | ----------------------------- |
-| Backend API     | Python, FastAPI, Pydantic     |
-| Agent framework | OpenAI Agents SDK             |
-| Persistence     | Turso / libSQL                |
-| Authentication  | JWT                           |
-| Testing         | pytest, FastAPI TestClient    |
-| Frontend        | Planned: React and TypeScript |
-
-The frontend stack may evolve as implementation progresses.
+| Component        | Technology                 |
+| ---------------- | -------------------------- |
+| Backend API      | Python, FastAPI, Pydantic  |
+| Agent framework  | OpenAI Agents SDK          |
+| Persistence      | Turso / libSQL             |
+| Authentication   | JWT                        |
+| Testing          | pytest, FastAPI TestClient |
+| Frontend         | React, TypeScript, Vite    |
+| Frontend hosting | Cloudflare Pages           |
+| Backend hosting  | Render                     |
 
 ## Responsible Use
 
@@ -232,8 +249,9 @@ The vulnerable implementations are deliberately insecure and must not be deploye
 ## Development Roadmap
 
 - **Backend foundation:** Domain model, application use cases, authentication, authorization, persistence, and agent execution.
-- **Security scenarios:** Implement paired vulnerable and hardened paths with automated verification.
-- **Frontend:** Build an interface for demonstrating attacks and mitigations.
+- **Security scenarios:** Implement paired vulnerable and hardened paths with automated verification. SEC-01 is implemented; additional scenarios remain planned.
+- **Frontend:** Initial React/TypeScript interface deployed; continue interface development, responsive validation, and end-to-end testing.
+- **Deployment and integration:** Maintain the Cloudflare Pages frontend and Render backend, and verify authentication, session behavior, CORS, and API integration as the deployment evolves.
 - **Documentation:** Maintain architecture decisions, threat modeling, and technical records for implemented scenarios.
 
 ## Author

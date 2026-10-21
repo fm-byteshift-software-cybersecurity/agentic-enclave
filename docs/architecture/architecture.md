@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document describes the architectural principles, component boundaries, and security responsibilities of **AgenticEnclave**, an AI-powered application designed to demonstrate security engineering practices for AI agent systems.
+This document describes the architectural principles, component boundaries, and security responsibilities of AgenticEnclave, an AI-powered application designed to demonstrate security engineering practices for AI agent systems.
 
 The project combines Hexagonal Architecture, application use cases, AI agent execution, and application-level security controls.
 
@@ -18,12 +18,12 @@ This document distinguishes the architecture currently implemented from capabili
 
 AgenticEnclave follows a pragmatic combination of:
 
-- **Hexagonal Architecture (Ports and Adapters):** Isolate the application core from external technologies.
-- **Dependency Inversion:** Make infrastructure implementations depend on abstractions owned by the application core.
-- **Domain-Driven Design principles:** Represent business concepts and enforce domain invariants explicitly.
-- **Application use cases:** Coordinate business operations and security-sensitive decisions.
-- **Security by design:** Enforce security controls at application execution boundaries.
-- **Testability:** Verify business behavior and security controls independently of the LLM wherever practical.
+- Hexagonal Architecture (Ports and Adapters): Isolate the application core from external technologies.
+- Dependency Inversion: Make infrastructure implementations depend on abstractions owned by the application core.
+- Domain-Driven Design principles: Represent business concepts and enforce domain invariants explicitly.
+- Application use cases: Coordinate business operations and security-sensitive decisions.
+- Security by design: Enforce security controls at application execution boundaries.
+- Testability: Verify business behavior and security controls independently of the LLM wherever practical.
 
 The architecture favors explicit boundaries over abstractions introduced solely for theoretical purity.
 
@@ -33,38 +33,40 @@ The current backend separates HTTP entry points, application behavior, domain ru
 
 ```text
                    PRIMARY ADAPTER
-                ┌────────────────────┐
-                │    FastAPI API     │
-                │ Authentication     │
-                │ HTTP Error Mapping │
-                └─────────┬──────────┘
-                          │
-                          ▼
-                APPLICATION CORE
-                ┌────────────────────┐
-                │ Application Context│
-                │ Use Cases          │
-                │ Authorization      │
-                │ Tool Contracts     │
-                │ Repository Ports   │
-                └─────────┬──────────┘
-                          │
-                ┌─────────┴──────────┐
-                ▼                    ▼
-             DOMAIN           SECONDARY ADAPTERS
-        ┌──────────────┐    ┌────────────────────┐
-        │ Order        │    │ OpenAI Agent       │
-        │ OrderStatus  │    │ Runtime / Tools    │
-        │ Business     │    ├────────────────────┤
-        │ Rules        │    │ Turso Repository   │
-        └──────────────┘    └────────────────────┘
+                   ┌────────────────────┐
+                   │    FastAPI API     │
+                   │ Authentication     │
+                   │ HTTP Error Mapping │
+                   └─────────┬──────────┘
+                             │
+                             ▼
+                   APPLICATION CORE
+                   ┌────────────────────┐
+                   │ Application Context│
+                   │ Use Cases          │
+                   │ Authorization      │
+                   │ Tool Contracts     │
+                   │ Repository Ports   │
+                   └─────────┬──────────┘
+                             │
+                   ┌─────────┴──────────┐
+                   ▼                    ▼
+                DOMAIN           SECONDARY ADAPTERS
+           ┌──────────────┐    ┌────────────────────┐
+           │ Order        │    │ OpenAI Agent       │
+           │ OrderStatus  │    │ Runtime / Tools    │
+           │ Business     │    ├────────────────────┤
+           │ Rules        │    │ Turso Repository   │
+           └──────────────┘    └────────────────────┘
 ```
 
 This is a conceptual view, not a complete representation of every class or dependency.
 
 The actual implementation places the OpenAI-specific agent runtime and function-tool integration under `backend/app/adapters/llm/openai/`. The database integration is implemented under `backend/app/adapters/database/`.
 
-The frontend and additional agent capabilities remain outside the current implementation scope.
+The React/TypeScript frontend is implemented and deployed separately from the backend. Additional agent capabilities remain outside the current implementation scope.
+
+The current deployment uses Cloudflare Pages for the frontend and Render for the backend API. Deployment infrastructure does not change the architectural dependency direction: the frontend communicates with the backend through HTTP, while backend business rules remain within the application core.
 
 ## 4. Dependency Direction
 
@@ -125,14 +127,14 @@ The Application layer coordinates use cases and enforces application-level polic
 
 Current responsibilities include:
 
-- Executing use cases
-- Evaluating authorization policies where required
-- Defining permissions and actor context
-- Defining application tool contracts
-- Accessing persistence through repository ports
-- Enforcing lab isolation in the vulnerable demonstration flow
-- Listing orders belonging to the authenticated user's lab
-- Resetting the status of orders belonging to the authenticated user's lab to `pending`, without deleting or recreating records
+- Executing use cases.
+- Evaluating authorization policies where required.
+- Defining permissions and actor context.
+- Defining application tool contracts.
+- Accessing persistence through repository ports.
+- Enforcing lab isolation in the vulnerable demonstration flow.
+- Listing orders belonging to the authenticated user's lab.
+- Resetting the status of orders belonging to the authenticated user's lab to `pending`, without deleting or recreating records.
 
 The implemented cancellation flow includes `CancelOrderUseCase`, `VulnerableCancelOrderUseCase`, the relevant cancellation tools, `AuthorizationPolicy`, `Actor`, `Permission`, and `OrderRepository`.
 
@@ -162,11 +164,11 @@ The current primary adapter is the FastAPI REST API, implemented through `backen
 
 Its responsibilities include:
 
-- Receiving HTTP requests
-- Establishing the authenticated user context
-- Invoking the appropriate runtime or application flow
-- Mapping application failures to HTTP responses
-- Returning serialized results
+- Receiving HTTP requests.
+- Establishing the authenticated user context.
+- Invoking the appropriate runtime or application flow.
+- Mapping application failures to HTTP responses.
+- Returning serialized results.
 
 HTTP handling should not become the sole enforcement point for resource-level authorization. Security-sensitive use cases must enforce the rules required for their operations.
 
@@ -176,8 +178,8 @@ Secondary adapters connect application behavior to external technologies.
 
 The current implementation includes:
 
-- **Turso / libSQL:** Persistence through the database repository adapter.
-- **OpenAI Agents SDK:** Agent execution and function-tool integration.
+- Turso / libSQL: Persistence through the database repository adapter.
+- OpenAI Agents SDK: Agent execution and function-tool integration.
 
 `TursoOrderRepository` implements the repository port, including the lab-membership query used to isolate demonstration environments.
 
@@ -204,16 +206,16 @@ Authenticated HTTP Request
       Function Tool Adapter
             │
             ▼
-       Application Tool
+        Application Tool
             │
             ▼
-          Use Case
+           Use Case
             │
             ▼
-      OrderRepository
+       OrderRepository
             │
             ▼
-       Turso Database
+        Turso Database
 ```
 
 The exact use case and security checks depend on the endpoint being exercised.
@@ -248,10 +250,10 @@ Authenticated Actor
         ├── Denied → AuthorizationDenied
         │
         ▼
-   Domain Operation
+    Domain Operation
         │
         ▼
-   Persist Changes
+    Persist Changes
 ```
 
 A denied ownership check prevents the state-changing operation. The API maps the relevant authorization failure to an HTTP response.
@@ -260,7 +262,7 @@ A denied ownership check prevents the state-changing operation. The API maps the
 
 The vulnerable cancellation path deliberately omits customer-ownership authorization so that Broken Object Level Authorization (BOLA) can be demonstrated.
 
-However, the vulnerable path does **not** remove every security boundary. It verifies that the requested order belongs to the authenticated actor's lab before retrieving and modifying it.
+However, the vulnerable path does not remove every security boundary. It verifies that the requested order belongs to the authenticated actor's lab before retrieving and modifying it.
 
 Its execution flow is:
 
@@ -285,16 +287,16 @@ belongs_to_lab(order_id, actor.user_id)
     Domain Cancel
         │
         ▼
-   Persist Changes
+    Persist Changes
 ```
 
 The repository check uses the order's `lab_owner_id`, not its `customer_id`.
 
 This creates the intended demonstration boundary:
 
-- **Same lab, different customer:** The vulnerable path permits cancellation if the order can otherwise be cancelled.
-- **Different lab:** The vulnerable path rejects the request and returns the same not-found application error used for a nonexistent order.
-- **Hardened path, different customer:** The hardened path denies cancellation even when the order belongs to the same lab.
+- Same lab, different customer: The vulnerable path permits cancellation if the order can otherwise be cancelled.
+- Different lab: The vulnerable path rejects the request and returns the same not-found application error used for a nonexistent order.
+- Hardened path, different customer: The hardened path denies cancellation even when the order belongs to the same lab.
 
 Returning `EntityNotFound` for an order outside the actor's lab avoids exposing whether that order exists in another lab.
 
@@ -336,9 +338,9 @@ Tools must not bypass the use cases responsible for the relevant operation.
 
 Three concepts must remain distinct:
 
-- **Tool availability:** The capability is exposed to an agent.
-- **Authorization and isolation:** The current actor is permitted to access the resource within the relevant security boundary.
-- **Business validity:** The operation satisfies domain rules.
+- Tool availability: The capability is exposed to an agent.
+- Authorization and isolation: The current actor is permitted to access the resource within the relevant security boundary.
+- Business validity: The operation satisfies domain rules.
 
 Availability does not imply authorization, and authorization does not imply that a business operation is valid.
 
@@ -388,7 +390,7 @@ AgenticEnclave uses paired implementations to demonstrate individual security we
 
 The vulnerable implementation intentionally omits a specific control. The hardened implementation enforces that control within the appropriate application boundary.
 
-The current example is **SEC-01: Broken Object Level Authorization (BOLA)**.
+The current example is SEC-01: Broken Object Level Authorization (BOLA).
 
 The vulnerable implementation omits customer-ownership authorization while enforcing lab isolation through `OrderRepository.belongs_to_lab`. The hardened implementation checks customer ownership through the authorization policy before changing the order's state.
 
@@ -407,10 +409,10 @@ Security verification is part of the development process rather than a final act
 
 The project uses multiple testing levels as appropriate to each component:
 
-- **Unit tests:** Domain behavior, use cases, and authorization policies.
-- **Integration tests:** Interactions among application components, repositories, and API entry points.
-- **Security tests:** Deliberately constructed attacks against vulnerable and hardened paths.
-- **End-to-end tests:** Complete application workflows where required.
+- Unit tests: Domain behavior, use cases, and authorization policies.
+- Integration tests: Interactions among application components, repositories, and API entry points.
+- Security tests: Deliberately constructed attacks against vulnerable and hardened paths.
+- End-to-end tests: Complete application workflows where required.
 
 For SEC-01, verification covers the intended differences between the paths:
 
@@ -422,6 +424,8 @@ For SEC-01, verification covers the intended differences between the paths:
 Deterministic test doubles can verify application security behavior without relying on nondeterministic LLM responses. Manual API validation can separately exercise the real agent runtime.
 
 A successful model response is not proof of security. Tests must establish whether the application enforced the required controls and whether unauthorized state changes were prevented.
+
+The frontend and backend are deployed, and login has been confirmed to work in the deployed environment following a CORS configuration correction. This is a deployment and integration milestone, not evidence that every end-to-end workflow or security scenario has been verified in production.
 
 ## 12. Technology Stack
 
@@ -437,7 +441,14 @@ The current backend uses:
 | Authentication    | JWT                        |
 | Automated testing | pytest, FastAPI TestClient |
 
-**Planned:** React and TypeScript frontend.
+The implemented frontend uses React and TypeScript with Vite. It is deployed through Cloudflare Pages.
+
+The backend API is deployed through Render. The current public addresses are:
+
+- Frontend: `https://agentic-enclave.cybersecuritypainintelligence.com`
+- Backend API: `https://agentic-enclave-api.onrender.com`
+
+The frontend and backend are deployed independently. CORS configuration controls which browser origins are permitted to make cross-origin requests to the backend.
 
 Support for additional LLM providers, including Google Gemini and Groq, may be introduced later. The current OpenAI-specific adapter should not be interpreted as evidence that interchangeable provider adapters are already implemented.
 
@@ -445,16 +456,16 @@ Support for additional LLM providers, including Google Gemini and Groq, may be i
 
 The following rules guide implementation and code review:
 
-1. **The domain remains independent of infrastructure and agent frameworks.**
-2. **LLM output cannot authorize an operation.**
-3. **Security-sensitive tools delegate to application use cases rather than bypassing them.**
-4. **Resource-level authorization is enforced using trusted identity and resource data in the hardened path.**
-5. **The vulnerable demonstration retains lab isolation even while omitting customer-ownership authorization.**
-6. **Domain invariants remain enforced independently of the agent runtime.**
-7. **External content and model-generated instructions are treated as untrusted input.**
-8. **Security controls fail closed when required context or permission is missing or invalid.**
-9. **Security controls must be testable independently of the LLM wherever practical.**
-10. **Vulnerable implementations remain isolated to controlled demonstrations.**
+1. The domain remains independent of infrastructure and agent frameworks.
+2. LLM output cannot authorize an operation.
+3. Security-sensitive tools delegate to application use cases rather than bypassing them.
+4. Resource-level authorization is enforced using trusted identity and resource data in the hardened path.
+5. The vulnerable demonstration retains lab isolation even while omitting customer-ownership authorization.
+6. Domain invariants remain enforced independently of the agent runtime.
+7. External content and model-generated instructions are treated as untrusted input.
+8. Security controls fail closed when required context or permission is missing or invalid.
+9. Security controls must be testable independently of the LLM wherever practical.
+10. Vulnerable implementations remain isolated to controlled demonstrations.
 
 These invariants are architectural requirements. Their compliance must be verified against the implementation as the project evolves.
 
@@ -476,23 +487,23 @@ The architecture document will evolve when meaningful implementation decisions c
 
 Future work may include:
 
-- A frontend for interactive security demonstrations.
-- Additional vulnerable and hardened scenarios.
+- Additional vulnerable and hardened security scenarios.
 - Further agent capabilities and tool boundaries.
 - Additional LLM provider adapters.
 - Broader security and end-to-end verification.
+- Continued frontend development, responsive validation, and end-to-end integration testing.
 
-These are potential extensions, not claims that the corresponding capabilities are already implemented.
+The initial frontend has been implemented and deployed. The items above describe further work and must not be interpreted as claims that all corresponding capabilities or tests are complete.
 
 ---
 
-**Core principle:** AgenticEnclave is designed so that an incorrect or manipulated agent request does not automatically become an authorized application action. Security decisions remain the responsibility of application-controlled code.
+Core principle: AgenticEnclave is designed so that an incorrect or manipulated agent request does not automatically become an authorized application action. Security decisions remain the responsibility of application-controlled code.
 
 ## Author
 
-**Fernando Magalhães**  
+Fernando Magalhães
+
 CEO — FM ByteShift Software
 
-[fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)
-
-[Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
+- [FM ByteShift Software](https://fmbyteshiftsoftware.com/)
+- [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)

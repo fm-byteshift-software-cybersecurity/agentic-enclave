@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document defines the security threat model for **AgenticEnclave**, an AI-powered customer support application designed to demonstrate secure engineering practices for AI agent systems.
+This document defines the security threat model for AgenticEnclave, an AI-powered customer support application designed to demonstrate secure engineering practices for AI agent systems.
 
 The project focuses on a limited set of representative application security and AI agent risks. Each implemented scenario should demonstrate a complete security development cycle:
 
@@ -24,11 +24,11 @@ Regression Test
 
 The core security principle is:
 
-> **An AI agent may request an action. Trusted application code must decide whether that action is allowed.**
+> An AI agent may request an action. Trusted application code must decide whether that action is allowed.
 
 Neither the LLM nor the agent runtime is an authorization boundary. Authentication, authorization, resource ownership, business invariants, and tool permissions must be enforced by trusted application components.
 
-This document distinguishes the **current implementation** from **planned scenarios**. Listing a scenario does not imply that its functionality, mitigation, or security tests have already been implemented.
+This document distinguishes the current implementation from planned scenarios. Listing a scenario does not imply that its functionality, mitigation, or security tests have already been implemented.
 
 ## 2. System Scope and Status
 
@@ -47,15 +47,28 @@ The current backend includes:
 - A reset operation that updates existing orders belonging to the authenticated lab owner to `pending`, without deleting or recreating records.
 - Automated tests covering the vulnerable and hardened cancellation behaviors.
 
-The current security demonstration is **SEC-01 — Broken Object Level Authorization (BOLA)**, implemented for order cancellation.
+The current security demonstration is SEC-01 — Broken Object Level Authorization (BOLA), implemented for order cancellation.
 
 The vulnerable path demonstrates unauthorized cross-customer cancellation within the same lab. It does not intentionally disable every security control.
+
+The frontend is implemented using React, TypeScript, and Vite. It is deployed through Cloudflare Pages and communicates with the backend API hosted on Render.
+
+The current public deployment uses:
+
+- Frontend: `https://agentic-enclave.cybersecuritypainintelligence.com`
+- Backend API: `https://agentic-enclave-api.onrender.com`
+
+Login has been confirmed to work in the deployed environment following a CORS configuration correction. Additional frontend validation, session verification, logout testing, and end-to-end integration testing remain ongoing.
+
+The existence of a deployed frontend does not imply that all security controls, user workflows, or security scenarios have been implemented or verified in production.
 
 ### 2.2 Planned or Not Yet in Scope
 
 The broader customer support architecture and the remaining scenarios in this document are design targets, not claims about current functionality.
 
-A frontend, multiple cooperating agents, external content ingestion, support ticket workflows, and scenarios SEC-02 through SEC-10 must be considered planned until their implementations and security tests are verified.
+The initial frontend is implemented and deployed. Further frontend development, responsive validation, and end-to-end testing remain in progress.
+
+Multiple cooperating agents, external content ingestion, support ticket workflows, and scenarios SEC-02 through SEC-10 must be considered planned until their implementations and security tests are verified.
 
 ### 2.3 Current Request Flow
 
@@ -63,16 +76,19 @@ A frontend, multiple cooperating agents, external content ingestion, support tic
 Authenticated Client
         |
         v
-     FastAPI
+     Frontend
+        |
+        v
+      FastAPI
         |
         v
  OpenAI Agent Runtime
         |
         v
-   Tool Adapter
+    Tool Adapter
         |
         v
-  Application Tool
+   Application Tool
         |
         v
  Cancellation Use Case
@@ -180,6 +196,8 @@ Potentially malicious content, such as documents, emails, web pages, or support 
 
 Client-supplied data is untrusted. The API must validate requests and derive the authenticated identity from trusted authentication mechanisms, not arbitrary request fields.
 
+The frontend is a client, not a security boundary. Client-side controls and interface behavior must not substitute for backend authentication, authorization, or resource-isolation checks.
+
 ### Boundary 2 — User Input to Agent
 
 User prompts can influence model behavior but do not grant permission. The model may interpret a request incorrectly or follow malicious instructions.
@@ -247,13 +265,13 @@ The catalogue does not imply that AgenticEnclave currently implements all these 
 
 References:
 
-- [OWASP Top 10:2025](https://owasp.org/Top10/2025/)
+- [OWASP Top 10:2025](https://owasp.org/www-project-top-ten/)
 - [OWASP GenAI Security Project](https://genai.owasp.org/)
 - [OWASP API Security Project](https://owasp.org/www-project-api-security/)
 
 ## 8. SEC-01 — BOLA / IDOR
 
-**Status: Implemented**
+Status: Implemented
 
 ### Vulnerability
 
@@ -267,7 +285,7 @@ An authenticated customer submits an order identifier belonging to another custo
 
 The current demonstration uses:
 
-```text
+```http
 POST /api/vulnerable/orders/cancel
 POST /api/orders/cancel
 ```
@@ -290,9 +308,9 @@ The current scenario demonstrates unauthorized state modification. It does not c
 
 ### Security Mapping
 
-- **OWASP API Security Top 10:2023:** API1 — Broken Object Level Authorization.
-- **OWASP Top 10:2025:** A01 — Broken Access Control.
-- **CWE-639:** Authorization Bypass Through User-Controlled Key.
+- OWASP API Security Top 10:2023: API1 — Broken Object Level Authorization.
+- OWASP Top 10:2025: A01 — Broken Access Control.
+- CWE-639: Authorization Bypass Through User-Controlled Key.
 
 These mappings describe the underlying authorization weakness rather than merely the presence of an order identifier in a request.
 
@@ -346,7 +364,7 @@ Automated tests and manual API validation verify the following behaviors:
 
 The lab order listing and reset endpoints were also validated manually through the API. The listing operation returns orders belonging to the authenticated lab owner, and the reset operation changes those orders to `pending` without deleting or recreating records.
 
-The automated test suite passed with **46 tests** at the last verified checkpoint. The test count is a snapshot and may change as the project evolves.
+The automated test suite passed with 46 tests at the last verified checkpoint. The test count is a snapshot and may change as the project evolves.
 
 ## 9. Guidance for Future Scenarios
 
@@ -354,77 +372,77 @@ The following sections define intended outcomes for future scenarios. They are s
 
 ### SEC-02 — Broken Access Control / Excessive Privileges
 
-**Threat:** A user or agent can invoke a capability beyond the permissions intended for that identity or role.
+Threat: A user or agent can invoke a capability beyond the permissions intended for that identity or role.
 
-**Required control:** Define permitted capabilities explicitly and enforce authorization in trusted application code. Do not infer authorization from the fact that a tool is registered or available to an agent.
+Required control: Define permitted capabilities explicitly and enforce authorization in trusted application code. Do not infer authorization from the fact that a tool is registered or available to an agent.
 
-**Verification goal:** An actor without the required permission cannot execute the capability, even when the agent requests it.
+Verification goal: An actor without the required permission cannot execute the capability, even when the agent requests it.
 
 ### SEC-03 — Sensitive Information Disclosure
 
-**Threat:** The application returns data to a user who is not authorized to receive it, whether disclosure is triggered by a prompt or by a traditional access control flaw.
+Threat: The application returns data to a user who is not authorized to receive it, whether disclosure is triggered by a prompt or by a traditional access control flaw.
 
-**Required control:** Enforce access control before sensitive data enters model context and before a response is returned. Prompt instructions alone are not an adequate confidentiality control.
+Required control: Enforce access control before sensitive data enters model context and before a response is returned. Prompt instructions alone are not an adequate confidentiality control.
 
-**Verification goal:** Unauthorized data is not retrieved or disclosed. Classify the root cause separately when the issue is resource authorization, excessive agency, prompt injection, or output handling.
+Verification goal: Unauthorized data is not retrieved or disclosed. Classify the root cause separately when the issue is resource authorization, excessive agency, prompt injection, or output handling.
 
 ### SEC-04 — Business Logic Violation
 
-**Threat:** An operation is allowed even though the current domain state violates a required business workflow.
+Threat: An operation is allowed even though the current domain state violates a required business workflow.
 
-**Example:** Cancelling an order after shipment when the business rules prohibit cancellation at that stage.
+Example: Cancelling an order after shipment when the business rules prohibit cancellation at that stage.
 
-**Required control:** Enforce valid state transitions and business invariants in domain/application logic, independently of the agent's recommendation.
+Required control: Enforce valid state transitions and business invariants in domain/application logic, independently of the agent's recommendation.
 
-**Verification goal:** An invalid transition is rejected and the persisted state remains unchanged.
+Verification goal: An invalid transition is rejected and the persisted state remains unchanged.
 
 ### SEC-05 — Direct Prompt Injection
 
-**Threat:** A user supplies instructions intended to override the agent's intended task or influence its tool use.
+Threat: A user supplies instructions intended to override the agent's intended task or influence its tool use.
 
-**Required control:** Treat prompt-level safeguards as defense in depth. All resulting tool requests must still be constrained by application authorization, validation, and least privilege.
+Required control: Treat prompt-level safeguards as defense in depth. All resulting tool requests must still be constrained by application authorization, validation, and least privilege.
 
-**Verification goal:** A manipulated agent cannot use the prompt alone to bypass application controls.
+Verification goal: A manipulated agent cannot use the prompt alone to bypass application controls.
 
 ### SEC-06 — Indirect Prompt Injection
 
-**Threat:** Malicious instructions embedded in external content influence the agent after that content is ingested.
+Threat: Malicious instructions embedded in external content influence the agent after that content is ingested.
 
-**Required control:** Treat external content as untrusted data, separate data from trusted instructions where possible, limit agent capabilities, and enforce authorization outside the model.
+Required control: Treat external content as untrusted data, separate data from trusted instructions where possible, limit agent capabilities, and enforce authorization outside the model.
 
-**Verification goal:** Malicious content cannot independently grant access or authorize a protected operation.
+Verification goal: Malicious content cannot independently grant access or authorize a protected operation.
 
 ### SEC-07 — Excessive Agency
 
-**Threat:** An agent is given more tools, permissions, or autonomy than its task requires, increasing the impact of model errors or manipulation.
+Threat: An agent is given more tools, permissions, or autonomy than its task requires, increasing the impact of model errors or manipulation.
 
-**Required control:** Apply least privilege to tools and permissions. Constrain autonomy and resource consumption to the intended workflow.
+Required control: Apply least privilege to tools and permissions. Constrain autonomy and resource consumption to the intended workflow.
 
-**Verification goal:** Unnecessary capabilities are unavailable or denied, and execution has appropriate limits.
+Verification goal: Unnecessary capabilities are unavailable or denied, and execution has appropriate limits.
 
 ### SEC-08 — Tool Misuse / Unauthorized Tool Invocation
 
-**Threat:** The agent requests a legitimate tool in an unauthorized context or with parameters that would cause an impermissible action.
+Threat: The agent requests a legitimate tool in an unauthorized context or with parameters that would cause an impermissible action.
 
-**Required control:** Validate tool arguments and authorize the actor, capability, resource, and operation in trusted application code before executing the use case.
+Required control: Validate tool arguments and authorize the actor, capability, resource, and operation in trusted application code before executing the use case.
 
-**Verification goal:** A tool request cannot bypass authorization merely because the tool is registered with the agent.
+Verification goal: A tool request cannot bypass authorization merely because the tool is registered with the agent.
 
 ### SEC-09 — Agent-to-Agent Privilege Escalation
 
-**Threat:** A receiving agent trusts a message or claim from another agent as proof of permission.
+Threat: A receiving agent trusts a message or claim from another agent as proof of permission.
 
-**Required control:** Preserve explicit, trusted identity and authorization context across agent boundaries. A message must not itself grant privileges.
+Required control: Preserve explicit, trusted identity and authorization context across agent boundaries. A message must not itself grant privileges.
 
-**Verification goal:** A lower-privileged agent cannot obtain a higher-privileged capability by claiming that another agent approved the request.
+Verification goal: A lower-privileged agent cannot obtain a higher-privileged capability by claiming that another agent approved the request.
 
 ### SEC-10 — Improper Output Handling
 
-**Threat:** Model-generated output is used by a downstream component without validation, contextual encoding, or controls appropriate to the destination.
+Threat: Model-generated output is used by a downstream component without validation, contextual encoding, or controls appropriate to the destination.
 
-**Required control:** Treat model output as untrusted input. Validate schemas and values, use parameterized database operations, apply contextual output encoding, and avoid passing model output directly to shell commands, SQL, file paths, or other sensitive sinks.
+Required control: Treat model output as untrusted input. Validate schemas and values, use parameterized database operations, apply contextual output encoding, and avoid passing model output directly to shell commands, SQL, file paths, or other sensitive sinks.
 
-**Verification goal:** Crafted model output cannot trigger an unsafe downstream operation.
+Verification goal: Crafted model output cannot trigger an unsafe downstream operation.
 
 ## 10. Security Control Model
 
@@ -562,8 +580,9 @@ This separation is the fundamental security principle of AgenticEnclave.
 
 ## Author
 
-**Fernando Magalhães**  
+Fernando Magalhães
+
 CEO — FM ByteShift Software
 
-[fmbyteshiftsoftware.com](https://fmbyteshiftsoftware.com/)  
-[Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
+- [FM ByteShift Software](https://fmbyteshiftsoftware.com/)
+- [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
