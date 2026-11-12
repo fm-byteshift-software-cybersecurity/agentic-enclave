@@ -11,8 +11,7 @@ import {
   LockKeyhole,
   LogOut,
   ShieldAlert,
-  ShieldCheck,
-  Terminal,
+  ShieldCheck,  
   Workflow,
   Zap,
 } from "lucide-react";
