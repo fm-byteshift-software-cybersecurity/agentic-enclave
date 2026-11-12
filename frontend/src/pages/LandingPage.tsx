@@ -1,4 +1,3 @@
-
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -7,7 +6,9 @@ import {
   ArrowUpRight,
   Check,
   ChevronRight,
-  Code2,  
+  Code2,
+  Eye,
+  LockKeyhole,
   LogOut,
   ShieldAlert,
   ShieldCheck,
@@ -15,6 +16,7 @@ import {
   Workflow,
   Zap,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 
@@ -37,21 +39,21 @@ const scenarios = [
   },
   {
     id: "SEC-02",
-    title: "Prompt Injection",
-    shortName: "LLM Security",
+    title: "Broken Access Control",
+    shortName: "Excessive Privileges",
     description:
-      "What happens when untrusted instructions try to influence an agent's behavior?",
-    status: "Planned",
-    icon: Terminal,
+      "Can a restricted agent execute a privileged operation beyond its intended role?",
+    status: "Available",
+    icon: LockKeyhole,
   },
   {
     id: "SEC-03",
-    title: "Excessive Agency",
-    shortName: "Tool Security",
+    title: "Sensitive Information Disclosure",
+    shortName: "Data Exposure",
     description:
-      "Can an agent invoke capabilities beyond what the task actually requires?",
+      "Does the application return data to a user who is not authorized to receive it?",
     status: "Planned",
-    icon: Workflow,
+    icon: Eye,
   },
 ];
 
@@ -77,12 +79,10 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-
 function HeroPreview() {
   return (
     <div className="relative mx-auto w-full max-w-xl">
       <div className="absolute -inset-5 rounded-3xl bg-emerald-400/[0.04] blur-3xl" />
-
       <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0c1119] shadow-2xl shadow-black/40">
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div className="flex items-center gap-3">
@@ -102,7 +102,6 @@ function HeroPreview() {
             CONCEPT
           </span>
         </div>
-
         <div className="space-y-4 p-5 sm:p-6">
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
             <div className="flex items-center gap-3">
@@ -110,16 +109,13 @@ function HeroPreview() {
                 <Workflow size={19} />
               </div>
               <div>
-                <p className="text-sm font-medium text-white">
-                  AI agent
-                </p>
+                <p className="text-sm font-medium text-white">AI agent</p>
                 <p className="mt-1 text-xs text-slate-400">
                   Requests an action
                 </p>
               </div>
             </div>
           </div>
-
           <div className="flex flex-col items-center gap-1.5">
             <div className="h-4 w-px bg-white/15" />
             <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-slate-500">
@@ -127,22 +123,18 @@ function HeroPreview() {
             </span>
             <div className="h-4 w-px bg-white/15" />
           </div>
-
           <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] p-4">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-300">
                 <ShieldCheck size={19} />
               </div>
               <div>
-                <p className="text-sm font-medium text-white">
-                  Application
-                </p>
+                <p className="text-sm font-medium text-white">Application</p>
                 <p className="mt-1 text-xs text-slate-400">
                   Enforces security rules
                 </p>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-center gap-2 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.05] p-3">
                 <Check size={16} className="shrink-0 text-emerald-300" />
@@ -158,7 +150,6 @@ function HeroPreview() {
               </div>
             </div>
           </div>
-
           <p className="text-center text-[10px] text-slate-600">
             Conceptual illustration · No live request
           </p>
@@ -167,7 +158,6 @@ function HeroPreview() {
     </div>
   );
 }
-
 
 export default function LandingPage() {
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
@@ -181,7 +171,6 @@ export default function LandingPage() {
     async function checkSession() {
       try {
         await apiGet<AuthenticatedUser>("/api/auth/me");
-
         if (isMounted) {
           setAuthStatus("authenticated");
         }
@@ -189,7 +178,6 @@ export default function LandingPage() {
         if (!isMounted) {
           return;
         }
-
         if (error instanceof ApiError && error.status === 401) {
           setAuthStatus("unauthenticated");
         } else {
@@ -209,10 +197,8 @@ export default function LandingPage() {
     if (isLoggingOut) {
       return;
     }
-
     setIsLoggingOut(true);
     setLogoutError(null);
-
     try {
       await apiPost<void>("/api/auth/logout", {});
       setAuthStatus("unauthenticated");
@@ -223,7 +209,7 @@ export default function LandingPage() {
         setLogoutError(
           error instanceof ApiError
             ? error.message
-            : "Unable to sign out. Please try again.",
+            : "Unable to sign out. Please try again."
         );
       }
     } finally {
@@ -239,7 +225,6 @@ export default function LandingPage() {
           className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-6 px-5 sm:px-8"
         >
           <Brand />
-
           <div className="hidden items-center gap-7 md:flex">
             <a
               href="#platform"
@@ -260,7 +245,6 @@ export default function LandingPage() {
               Our approach
             </a>
           </div>
-
           <div className="flex items-center gap-3">
             {authStatus === "unauthenticated" && (
               <>
@@ -280,7 +264,6 @@ export default function LandingPage() {
                 </Button>
               </>
             )}
-
             {authStatus === "authenticated" && (
               <div className="flex flex-col items-end gap-1">
                 <Button
@@ -303,7 +286,6 @@ export default function LandingPage() {
                 )}
               </div>
             )}
-
             {authStatus === "error" && (
               <button
                 type="button"
@@ -329,21 +311,18 @@ export default function LandingPage() {
                 <span className="size-1.5 rounded-full bg-emerald-300" />
                 Security engineering for AI agents
               </div>
-
               <h1 className="max-w-2xl text-4xl font-semibold leading-[1.12] tracking-[-0.045em] text-white sm:text-5xl lg:text-[58px]">
                 Your AI agents can take action.
                 <span className="mt-2 block text-emerald-300">
                   Can you control what they do?
                 </span>
               </h1>
-
               <p className="mt-7 max-w-xl text-base leading-7 text-slate-400 sm:text-lg sm:leading-8">
                 Rushing to deploy AI agents without testing their security can
                 expose data, enable unauthorized actions, and put customer trust
                 at risk. Reproduce real attack scenarios and compare vulnerable
                 implementations with effective security controls.
               </p>
-
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Button
                   asChild
@@ -355,7 +334,6 @@ export default function LandingPage() {
                     <ArrowRight size={17} />
                   </a>
                 </Button>
-
                 <Button
                   asChild
                   size="lg"
@@ -367,7 +345,6 @@ export default function LandingPage() {
                   </a>
                 </Button>
               </div>
-
               <div className="mt-9 flex flex-wrap gap-x-5 gap-y-3 text-xs text-slate-500">
                 <span className="flex items-center gap-2">
                   <Check size={14} className="text-emerald-300" />
@@ -383,7 +360,6 @@ export default function LandingPage() {
                 </span>
               </div>
             </div>
-
             <HeroPreview />
           </div>
         </section>
@@ -404,7 +380,6 @@ export default function LandingPage() {
                 </p>
               </div>
             </div>
-
             <div className="flex gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
                 <ShieldAlert size={18} className="text-amber-300" />
@@ -419,7 +394,6 @@ export default function LandingPage() {
                 </p>
               </div>
             </div>
-
             <div className="flex gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
                 <Code2 size={18} className="text-sky-300" />
@@ -455,7 +429,7 @@ export default function LandingPage() {
             </div>
             <span className="flex items-center gap-2 text-sm text-slate-500">
               <span className="size-2 rounded-full bg-emerald-300" />
-              One scenario available
+              Two scenarios available
             </span>
           </div>
 
@@ -493,7 +467,6 @@ export default function LandingPage() {
                       {scenario.status}
                     </span>
                   </div>
-
                   <p className="mt-5 font-mono text-xs text-slate-500">
                     {scenario.id} · {scenario.shortName}
                   </p>
@@ -503,11 +476,10 @@ export default function LandingPage() {
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     {scenario.description}
                   </p>
-
                   <div className="mt-auto pt-6">
                     {available ? (
                       <Link
-                        to="/lab/sec-01"
+                        to={`/lab/${scenario.id.toLowerCase()}`}
                         className="inline-flex items-center gap-2 text-sm font-medium text-emerald-300 transition group-hover:gap-3"
                       >
                         Explore scenario <ArrowRight size={15} />
@@ -545,7 +517,6 @@ export default function LandingPage() {
                 that prevent it.
               </p>
             </div>
-
             <div className="space-y-3">
               {[
                 {
@@ -588,7 +559,6 @@ export default function LandingPage() {
         <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24">
           <div className="relative overflow-hidden rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.045] px-6 py-10 sm:px-10 sm:py-12 lg:px-14">
             <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-emerald-300/[0.07] blur-3xl" />
-
             <div className="relative flex flex-col justify-between gap-8 md:flex-row md:items-center">
               <div className="max-w-2xl">
                 <SectionLabel>Before you scale</SectionLabel>
@@ -600,7 +570,6 @@ export default function LandingPage() {
                   stronger controls into AI-powered systems.
                 </p>
               </div>
-
               <Button
                 asChild
                 size="lg"
@@ -619,7 +588,6 @@ export default function LandingPage() {
       <footer className="border-t border-white/[0.07]">
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-7 sm:px-8 md:flex-row md:items-center md:justify-between">
           <Brand />
-
           <div className="max-w-md text-xs leading-5 text-slate-500">
             <p>
               A security research lab by{" "}
@@ -643,7 +611,6 @@ export default function LandingPage() {
               .
             </p>
           </div>
-
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <a href="#approach" className="transition hover:text-white">
               About

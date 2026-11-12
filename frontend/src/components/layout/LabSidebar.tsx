@@ -18,6 +18,7 @@ import {
   FileOutput,
   X,
 } from "lucide-react";
+
 import { apiPost, ApiError } from "@/lib/api";
 
 type ScenarioId =
@@ -56,7 +57,7 @@ const scenarios: NavigationItem[] = [
     id: "SEC-02",
     title: "Broken Access Control",
     description: "Excessive privileges",
-    available: false,
+    available: true,
     icon: LockKeyhole,
   },
   {
@@ -123,7 +124,6 @@ function Brand() {
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
         <ShieldCheck size={20} strokeWidth={1.8} />
       </span>
-
       <span className="text-sm font-semibold tracking-tight text-white">
         Agentic<span className="text-emerald-300">Enclave</span>
       </span>
@@ -149,12 +149,10 @@ function SidebarContent({
       <div className="border-b border-white/[0.07] px-5 py-5">
         <Brand />
       </div>
-
       <div className="flex-1 px-3 py-6">
         <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
           Security lab
         </p>
-
         <Link
           to="/"
           onClick={onNavigate}
@@ -164,14 +162,12 @@ function SidebarContent({
           Project overview
           <ArrowLeft className="ml-auto" size={14} />
         </Link>
-
         <div className="mb-3 flex items-center justify-between px-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             Scenarios
           </p>
-          <span className="text-[10px] text-slate-600">01 / 10</span>
+          <span className="text-[10px] text-slate-600">02 / 10</span>
         </div>
-
         <nav aria-label="Security scenarios" className="space-y-1.5">
           {scenarios.map((scenario) => {
             const isActive = activeScenario === scenario.id;
@@ -189,7 +185,6 @@ function SidebarContent({
                     size={17}
                     className="mt-0.5 shrink-0 text-slate-500"
                   />
-
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium leading-5 text-slate-300">
                       {scenario.id} · {scenario.title}
@@ -198,7 +193,6 @@ function SidebarContent({
                       {scenario.description}
                     </p>
                   </div>
-
                   <span className="mt-0.5 shrink-0 rounded border border-white/[0.08] px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-500">
                     Planned
                   </span>
@@ -209,7 +203,7 @@ function SidebarContent({
             return (
               <Link
                 key={scenario.id}
-                to="/lab/sec-01"
+                to={`/lab/${scenario.id.toLowerCase()}`}
                 onClick={onNavigate}
                 aria-current={isActive ? "page" : undefined}
                 className={`group flex items-start gap-3 rounded-lg border px-3 py-3 transition ${
@@ -226,7 +220,6 @@ function SidebarContent({
                       : "text-slate-500 group-hover:text-slate-300"
                   }`}
                 />
-
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium leading-5">
                     {scenario.id} · {scenario.title}
@@ -239,7 +232,6 @@ function SidebarContent({
                     {scenario.description}
                   </p>
                 </div>
-
                 {isActive && (
                   <ChevronRight
                     size={15}
@@ -251,7 +243,6 @@ function SidebarContent({
           })}
         </nav>
       </div>
-
       <div className="border-t border-white/[0.07] p-4">
         <div className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
           <div className="flex items-center gap-2">
@@ -264,13 +255,11 @@ function SidebarContent({
             Explore vulnerable and hardened AI agent implementations.
           </p>
         </div>
-
         {logoutError && (
           <p role="alert" className="mt-3 px-1 text-xs leading-5 text-red-300">
             {logoutError}
           </p>
         )}
-
         <button
           type="button"
           onClick={onLogout}
@@ -280,7 +269,6 @@ function SidebarContent({
           <LogOut size={16} />
           {isLoggingOut ? "Signing out..." : "Sign out"}
         </button>
-
         <p className="mt-3 px-1 text-[10px] text-slate-600">
           FM ByteShift Software
         </p>
@@ -301,10 +289,8 @@ export default function LabSidebar({
     if (isLoggingOut) {
       return;
     }
-
     setIsLoggingOut(true);
     setLogoutError(null);
-
     try {
       await apiPost<void>("/api/auth/logout", {});
       setMobileMenuOpen(false);
@@ -313,7 +299,7 @@ export default function LabSidebar({
       setLogoutError(
         error instanceof ApiError
           ? error.message
-          : "Unable to sign out. Please try again.",
+          : "Unable to sign out. Please try again."
       );
     } finally {
       setIsLoggingOut(false);
@@ -332,7 +318,6 @@ export default function LabSidebar({
     <>
       <header className="flex h-16 items-center justify-between border-b border-white/[0.07] bg-[#080b11] px-4 md:hidden">
         <Brand />
-
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
@@ -343,11 +328,9 @@ export default function LabSidebar({
           <Menu size={20} />
         </button>
       </header>
-
       <aside className="hidden min-h-screen w-64 shrink-0 flex-col border-r border-white/[0.07] bg-[#0a0e15] md:flex">
         <SidebarContent {...sidebarProps} />
       </aside>
-
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <button
@@ -356,7 +339,6 @@ export default function LabSidebar({
             onClick={() => setMobileMenuOpen(false)}
             className="absolute inset-0 bg-black/70"
           />
-
           <aside className="relative flex h-full w-[min(18rem,85vw)] flex-col overflow-y-auto border-r border-white/[0.08] bg-[#0a0e15] shadow-2xl">
             <div className="absolute right-3 top-4 z-10">
               <button
@@ -368,7 +350,6 @@ export default function LabSidebar({
                 <X size={19} />
               </button>
             </div>
-
             <SidebarContent {...sidebarProps} />
           </aside>
         </div>

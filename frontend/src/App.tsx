@@ -1,8 +1,10 @@
 import { Route, Routes } from "react-router-dom";
+
 import LandingPage from "@/pages/LandingPage";
 import SignIn from "@/pages/SignIn";
 import SignUp from "@/pages/SignUp";
 import ScenarioBola from "@/pages/ScenarioBola";
+import ScenarioExcessivePrivileges from "@/pages/ScenarioExcessivePrivileges";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 export default function App() {
@@ -14,6 +16,7 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/lab/sec-01" element={<ScenarioBola />} />
+        <Route path="/lab/sec-02" element={<ScenarioExcessivePrivileges />} />
       </Route>
 
       <Route path="*" element={<LandingPage />} />
