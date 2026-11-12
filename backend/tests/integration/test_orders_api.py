@@ -382,3 +382,57 @@ def test_cancel_order_with_trusted_origin_reaches_authentication(
 
     assert response.status_code == 401
     assert response.headers["www-authenticate"] == "Bearer"
+    
+    
+def test_customer_agent_cannot_cancel_order_via_hardened_endpoint(
+    client: TestClient,
+) -> None:
+    """SEC-02: Hardened path must deny customer_agent from cancelling any order."""
+    response = client.post(
+        "/api/customer/cancel",
+        headers={"Authorization": "Bearer test-token"},
+        json={"user_input": "Cancel order 1842"},
+    )
+
+    assert response.status_code == 403
+    assert (
+        client.app.state.order_repository.get_by_id(1842).status
+        == OrderStatus.PENDING
+    )
+
+
+def test_customer_agent_can_cancel_order_via_vulnerable_endpoint_same_lab(
+    client: TestClient,
+) -> None:
+    """SEC-02: Vulnerable path allows customer_agent to cancel, demonstrating excessive privileges."""
+    response = client.post(
+        "/api/vulnerable/customer/cancel",
+        headers={"Authorization": "Bearer test-token"},
+        json={"user_input": "Cancel order 1844"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["order_id"] == 1844
+    assert response.json()["order_status"] == "cancelled"
+    assert (
+        client.app.state.order_repository.get_by_id(1844).status
+        == OrderStatus.CANCELLED
+    )
+
+
+def test_customer_agent_cannot_cancel_order_via_vulnerable_endpoint_cross_lab(
+    client: TestClient,
+) -> None:
+    """SEC-02: Vulnerable path must still enforce lab isolation."""
+    response = client.post(
+        "/api/vulnerable/customer/cancel",
+        headers={"Authorization": "Bearer test-token"},
+        json={"user_input": "Cancel order 1845"},
+    )
+
+    assert response.status_code == 404
+    assert (
+        client.app.state.order_repository.get_by_id(1845).status
+        == OrderStatus.PENDING
+    )    
+    

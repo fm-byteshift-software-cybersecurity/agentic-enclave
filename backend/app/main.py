@@ -1,4 +1,3 @@
-
 import os
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -65,12 +64,12 @@ class CancelOrderRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_schema()
+
     connection = create_turso_connection()
 
     try:
         order_repository = TursoOrderRepository(connection)
         user_repository = TursoUserRepository(connection)
-
         password_hasher = PasswordHasher()
         token_service = JWTTokenService()
 
@@ -81,6 +80,7 @@ async def lifespan(app: FastAPI):
         app.state.token_service = token_service
 
         yield
+
     finally:
         connection.close()
 
@@ -199,12 +199,13 @@ async def execute_cancellation(
     user: User,
     runtime: OpenAIRuntime | VulnerableOpenAIRuntime,
     repository: OrderRepository,
+    agent_id: str = "orders_agent",
 ) -> dict[str, str | int]:
     context = OpenAIAgentContext(
         application_context=AgentContext(
             actor=Actor(
                 user_id=user.id,
-                agent_id="orders_agent",
+                agent_id=agent_id,
             )
         )
     )
@@ -244,6 +245,7 @@ async def execute_cancellation(
         )
 
     tool_result = result.tool_results[0]
+
     order_id = tool_result.get("order_id")
     order_status = tool_result.get("status")
 
@@ -303,6 +305,41 @@ async def cancel_order_vulnerable(
         runtime=runtime,
         repository=repository,
     )
+
+
+@app.post("/api/customer/cancel")
+async def customer_cancel(
+    request: CancelOrderRequest,
+    user: Annotated[User, Depends(get_authenticated_user)],
+) -> dict[str, str | int]:
+    repository = app.state.order_repository
+    runtime = create_runtime(repository=repository)
+
+    return await execute_cancellation(
+        request=request,
+        user=user,
+        runtime=runtime,
+        repository=repository,
+        agent_id="customer_agent",
+    )
+
+
+@app.post("/api/vulnerable/customer/cancel")
+async def customer_cancel_vulnerable(
+    request: CancelOrderRequest,
+    user: Annotated[User, Depends(get_authenticated_user)],
+) -> dict[str, str | int]:
+    repository = app.state.order_repository
+    runtime = create_vulnerable_runtime(repository=repository)
+
+    return await execute_cancellation(
+        request=request,
+        user=user,
+        runtime=runtime,
+        repository=repository,
+        agent_id="customer_agent",
+    )
+
 
 @app.get("/health")
 async def health_check():

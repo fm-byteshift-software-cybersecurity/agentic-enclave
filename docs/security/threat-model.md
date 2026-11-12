@@ -47,7 +47,7 @@ The current backend includes:
 - A reset operation that updates existing orders belonging to the authenticated lab owner to `pending`, without deleting or recreating records.
 - Automated tests covering the vulnerable and hardened cancellation behaviors.
 
-The current security demonstration is SEC-01 — Broken Object Level Authorization (BOLA), implemented for order cancellation.
+The current security demonstrations include **SEC-01** — Broken Object Level Authorization (BOLA) and **SEC-02** — Broken Access Control / Excessive Privileges, both implemented for order cancellation workflows. The project now enforces both resource ownership authorization and agent capability authorization on the hardened paths.
 
 The vulnerable path demonstrates unauthorized cross-customer cancellation within the same lab. It does not intentionally disable every security control.
 
@@ -68,7 +68,7 @@ The broader customer support architecture and the remaining scenarios in this do
 
 The initial frontend is implemented and deployed. Further frontend development, responsive validation, and end-to-end testing remain in progress.
 
-Multiple cooperating agents, external content ingestion, support ticket workflows, and scenarios SEC-02 through SEC-10 must be considered planned until their implementations and security tests are verified.
+Multiple cooperating agents, external content ingestion, support ticket workflows, and scenarios **SEC-03** through SEC-10 must be considered planned until their implementations and security tests are verified.
 
 ### 2.3 Current Request Flow
 
@@ -150,17 +150,17 @@ Lab isolation is a separate security boundary from customer ownership authorizat
 
 The threat model considers the following assets. Not all of them are present in the current implementation.
 
-| Asset                                             | Security concern                        | Current status                                               |
-| ------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
-| Customer identity and account data                | Unauthorized access or modification     | Partially represented                                        |
-| Order identifiers, status, and customer ownership | Unauthorized access or state changes    | Implemented                                                  |
-| Lab ownership and resource isolation              | Cross-lab access                        | Implemented for SEC-01 cancellation and lab order management |
-| Tool definitions and capabilities                 | Misuse or excessive privileges          | Order cancellation tool implemented                          |
-| Authentication and authorization context          | Spoofing, substitution, or misuse       | Implemented for the current API flow                         |
-| LLM provider credentials                          | Secret disclosure or unauthorized use   | Configuration and deployment concern                         |
-| Agent instructions and context                    | Manipulation or disclosure              | Relevant to planned scenarios                                |
-| Support tickets and history                       | Unauthorized disclosure or modification | Planned                                                      |
-| Inter-agent messages and privileges               | Forgery or privilege escalation         | Planned                                                      |
+| Asset                                             | Security concern                        | Current status                                                                        |
+| ------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
+| Customer identity and account data                | Unauthorized access or modification     | Partially represented                                                                 |
+| Order identifiers, status, and customer ownership | Unauthorized access or state changes    | Implemented                                                                           |
+| Lab ownership and resource isolation              | Cross-lab access                        | Implemented for SEC-01 cancellation and lab order management                          |
+| Tool definitions and capabilities                 | Misuse or excessive privileges          | Order cancellation tool implemented; agent capability authorization enforced (SEC-02) |
+| Authentication and authorization context          | Spoofing, substitution, or misuse       | Implemented for the current API flow                                                  |
+| LLM provider credentials                          | Secret disclosure or unauthorized use   | Configuration and deployment concern                                                  |
+| Agent instructions and context                    | Manipulation or disclosure              | Relevant to planned scenarios                                                         |
+| Support tickets and history                       | Unauthorized disclosure or modification | Planned                                                                               |
+| Inter-agent messages and privileges               | Forgery or privilege escalation         | Planned                                                                               |
 
 Provider credentials must remain in server-side configuration or an appropriate secret management mechanism. They must not be exposed as user-facing application data or unnecessarily included in prompts.
 
@@ -245,7 +245,7 @@ The catalogue includes the current SEC-01 implementation and candidate scenarios
 | ID     | Category                       | Scenario                                     | Primary mapping                                                                     | Status      |
 | ------ | ------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------------------- | ----------- |
 | SEC-01 | Application Security           | BOLA / IDOR in order cancellation            | OWASP API Security Top 10:2023 API1; OWASP Top 10:2025 A01; CWE-639                 | Implemented |
-| SEC-02 | Application and Agent Security | Broken Access Control / Excessive Privileges | OWASP Top 10:2025 A01; CWE-862 or CWE-863 when supported by the root cause          | Planned     |
+| SEC-02 | Application and Agent Security | Broken Access Control / Excessive Privileges | OWASP Top 10:2025 A01; CWE-862                                                      | Implemented |
 | SEC-03 | AI and Application Security    | Sensitive Information Disclosure             | OWASP GenAI LLM Top 10:2025 LLM02; verify edition before implementation             | Planned     |
 | SEC-04 | Application Security           | Business Logic Violation                     | OWASP Top 10:2025 A06; CWE-841 where workflow enforcement is the cause              | Planned     |
 | SEC-05 | AI Security                    | Direct Prompt Injection                      | OWASP GenAI LLM Top 10:2025 LLM01; agentic mappings depend on the attack            | Planned     |
@@ -271,7 +271,7 @@ References:
 
 ## 8. SEC-01 — BOLA / IDOR
 
-Status: Implemented
+**Status:** Implemented
 
 ### Vulnerability
 
@@ -285,7 +285,7 @@ An authenticated customer submits an order identifier belonging to another custo
 
 The current demonstration uses:
 
-```http
+```text
 POST /api/vulnerable/orders/cancel
 POST /api/orders/cancel
 ```
@@ -308,9 +308,9 @@ The current scenario demonstrates unauthorized state modification. It does not c
 
 ### Security Mapping
 
-- OWASP API Security Top 10:2023: API1 — Broken Object Level Authorization.
-- OWASP Top 10:2025: A01 — Broken Access Control.
-- CWE-639: Authorization Bypass Through User-Controlled Key.
+- **OWASP API Security Top 10:2023:** API1 — Broken Object Level Authorization.
+- **OWASP Top 10:2025:** A01 — Broken Access Control.
+- **CWE-639:** Authorization Bypass Through User-Controlled Key.
 
 These mappings describe the underlying authorization weakness rather than merely the presence of an order identifier in a request.
 
@@ -370,81 +370,161 @@ The automated test suite passed with 46 tests at the last verified checkpoint. T
 
 The following sections define intended outcomes for future scenarios. They are security requirements, not statements that the corresponding functionality or defenses have already been implemented.
 
-### SEC-02 — Broken Access Control / Excessive Privileges
-
-Threat: A user or agent can invoke a capability beyond the permissions intended for that identity or role.
-
-Required control: Define permitted capabilities explicitly and enforce authorization in trusted application code. Do not infer authorization from the fact that a tool is registered or available to an agent.
-
-Verification goal: An actor without the required permission cannot execute the capability, even when the agent requests it.
-
 ### SEC-03 — Sensitive Information Disclosure
 
-Threat: The application returns data to a user who is not authorized to receive it, whether disclosure is triggered by a prompt or by a traditional access control flaw.
+**Threat:** The application returns data to a user who is not authorized to receive it, whether disclosure is triggered by a prompt or by a traditional access control flaw.
 
-Required control: Enforce access control before sensitive data enters model context and before a response is returned. Prompt instructions alone are not an adequate confidentiality control.
+**Required control:** Enforce access control before sensitive data enters model context and before a response is returned. Prompt instructions alone are not an adequate confidentiality control.
 
-Verification goal: Unauthorized data is not retrieved or disclosed. Classify the root cause separately when the issue is resource authorization, excessive agency, prompt injection, or output handling.
+**Verification goal:** Unauthorized data is not retrieved or disclosed. Classify the root cause separately when the issue is resource authorization, excessive agency, prompt injection, or output handling.
 
 ### SEC-04 — Business Logic Violation
 
-Threat: An operation is allowed even though the current domain state violates a required business workflow.
+**Threat:** An operation is allowed even though the current domain state violates a required business workflow.
 
-Example: Cancelling an order after shipment when the business rules prohibit cancellation at that stage.
+**Example:** Cancelling an order after shipment when the business rules prohibit cancellation at that stage.
 
-Required control: Enforce valid state transitions and business invariants in domain/application logic, independently of the agent's recommendation.
+**Required control:** Enforce valid state transitions and business invariants in domain/application logic, independently of the agent's recommendation.
 
-Verification goal: An invalid transition is rejected and the persisted state remains unchanged.
+**Verification goal:** An invalid transition is rejected and the persisted state remains unchanged.
 
 ### SEC-05 — Direct Prompt Injection
 
-Threat: A user supplies instructions intended to override the agent's intended task or influence its tool use.
+**Threat:** A user supplies instructions intended to override the agent's intended task or influence its tool use.
 
-Required control: Treat prompt-level safeguards as defense in depth. All resulting tool requests must still be constrained by application authorization, validation, and least privilege.
+**Required control:** Treat prompt-level safeguards as defense in depth. All resulting tool requests must still be constrained by application authorization, validation, and least privilege.
 
-Verification goal: A manipulated agent cannot use the prompt alone to bypass application controls.
+**Verification goal:** A manipulated agent cannot use the prompt alone to bypass application controls.
 
 ### SEC-06 — Indirect Prompt Injection
 
-Threat: Malicious instructions embedded in external content influence the agent after that content is ingested.
+**Threat:** Malicious instructions embedded in external content influence the agent after that content is ingested.
 
-Required control: Treat external content as untrusted data, separate data from trusted instructions where possible, limit agent capabilities, and enforce authorization outside the model.
+**Required control:** Treat external content as untrusted data, separate data from trusted instructions where possible, limit agent capabilities, and enforce authorization outside the model.
 
-Verification goal: Malicious content cannot independently grant access or authorize a protected operation.
+**Verification goal:** Malicious content cannot independently grant access or authorize a protected operation.
 
 ### SEC-07 — Excessive Agency
 
-Threat: An agent is given more tools, permissions, or autonomy than its task requires, increasing the impact of model errors or manipulation.
+**Threat:** An agent is given more tools, permissions, or autonomy than its task requires, increasing the impact of model errors or manipulation.
 
-Required control: Apply least privilege to tools and permissions. Constrain autonomy and resource consumption to the intended workflow.
+**Required control:** Apply least privilege to tools and permissions. Constrain autonomy and resource consumption to the intended workflow.
 
-Verification goal: Unnecessary capabilities are unavailable or denied, and execution has appropriate limits.
+**Verification goal:** Unnecessary capabilities are unavailable or denied, and execution has appropriate limits.
 
 ### SEC-08 — Tool Misuse / Unauthorized Tool Invocation
 
-Threat: The agent requests a legitimate tool in an unauthorized context or with parameters that would cause an impermissible action.
+**Threat:** The agent requests a legitimate tool in an unauthorized context or with parameters that would cause an impermissible action.
 
-Required control: Validate tool arguments and authorize the actor, capability, resource, and operation in trusted application code before executing the use case.
+**Required control:** Validate tool arguments and authorize the actor, capability, resource, and operation in trusted application code before executing the use case.
 
-Verification goal: A tool request cannot bypass authorization merely because the tool is registered with the agent.
+**Verification goal:** A tool request cannot bypass authorization merely because the tool is registered with the agent.
 
 ### SEC-09 — Agent-to-Agent Privilege Escalation
 
-Threat: A receiving agent trusts a message or claim from another agent as proof of permission.
+**Threat:** A receiving agent trusts a message or claim from another agent as proof of permission.
 
-Required control: Preserve explicit, trusted identity and authorization context across agent boundaries. A message must not itself grant privileges.
+**Required control:** Preserve explicit, trusted identity and authorization context across agent boundaries. A message must not itself grant privileges.
 
-Verification goal: A lower-privileged agent cannot obtain a higher-privileged capability by claiming that another agent approved the request.
+**Verification goal:** A lower-privileged agent cannot obtain a higher-privileged capability by claiming that another agent approved the request.
 
 ### SEC-10 — Improper Output Handling
 
-Threat: Model-generated output is used by a downstream component without validation, contextual encoding, or controls appropriate to the destination.
+**Threat:** Model-generated output is used by a downstream component without validation, contextual encoding, or controls appropriate to the destination.
 
-Required control: Treat model output as untrusted input. Validate schemas and values, use parameterized database operations, apply contextual output encoding, and avoid passing model output directly to shell commands, SQL, file paths, or other sensitive sinks.
+**Required control:** Treat model output as untrusted input. Validate schemas and values, use parameterized database operations, apply contextual output encoding, and avoid passing model output directly to shell commands, SQL, file paths, or other sensitive sinks.
 
-Verification goal: Crafted model output cannot trigger an unsafe downstream operation.
+**Verification goal:** Crafted model output cannot trigger an unsafe downstream operation.
 
-## 10. Security Control Model
+## 10. SEC-02 — Broken Access Control / Excessive Privileges
+
+**Status:** Implemented
+
+### Vulnerability
+
+Broken Access Control (specifically Excessive Privileges) occurs when an application allows an actor (in this case, a specific AI agent role acting on behalf of a user) to invoke a capability or perform an operation that exceeds the permissions intended for that identity or role.
+
+A common design error is conflating _tool availability_ (the fact that an agent can see or request a tool) with _execution permission_ (the trusted application's verification that the current actor is allowed to invoke it).
+
+### Attack Scenario
+
+An authenticated user interacts with a restricted agent (e.g., `customer_agent`, which is not granted the `CANCEL_ORDER` permission) and prompts it to cancel an order.
+
+The current demonstration uses:
+
+```text
+POST /api/vulnerable/customer/cancel
+POST /api/customer/cancel
+```
+
+Both endpoints explicitly set the execution context to `agent_id="customer_agent"`. The vulnerable endpoint intentionally omits agent capability authorization, while the hardened endpoint enforces it via the `AuthorizationPolicy`.
+
+### Root Cause
+
+The vulnerable implementation does not enforce agent capability authorization before performing the state-changing operation. It assumes that because the tool is registered and the request passes lab isolation, the operation is permitted.
+
+The underlying design error is treating the agent's tool selection as sufficient permission to execute the action, without consulting the centralized, trusted `AuthorizationPolicy`.
+
+### Impact
+
+Successful exploitation of the vulnerable path may cause:
+
+- Unauthorized state changes triggered by agents operating outside their designated scope.
+- Violation of the principle of least privilege.
+- Operational disruption if restricted agents are manipulated into performing administrative or destructive actions.
+- Escalation of impact in the event of prompt injection or agent malfunction.
+
+### Security Mapping
+
+- **OWASP Top 10:2025:** A01 — Broken Access Control.
+- **CWE-862:** Missing Authorization.
+
+These mappings describe the failure to enforce restrictions on what authenticated users or agents are allowed to do, specifically regarding capability-level permissions.
+
+### Vulnerable and Hardened Behavior
+
+| Scenario                                                   | Vulnerable endpoint (`/api/vulnerable/customer/cancel`) | Hardened endpoint (`/api/customer/cancel`)           |
+| ---------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| `customer_agent` cancels an order in the same lab          | Allowed (demonstrates excessive privileges)             | Denied with `403 Forbidden`                          |
+| `customer_agent` cancels an order belonging to another lab | Denied with `404 Not Found` (lab isolation enforced)    | Denied by resource access controls                   |
+| `orders_agent` (privileged) cancels an order               | N/A (endpoint is scoped to customer context)            | Allowed when authorization and business rules permit |
+
+### Hardened Design
+
+The hardened implementation enforces capability authorization in trusted application code _before_ any resource retrieval or state change.
+
+```text
+Authenticated Actor (with trusted agent_id)
+         +
+ Requested Operation (Capability)
+         |
+         v
+ Capability Authorization Check (via AuthorizationPolicy)
+         |
+         +---- Denied ----> Reject Request (403 Forbidden)
+         |
+         v
+ Resource Retrieval & Lab Isolation
+         |
+         v
+ Domain Rules
+         |
+         v
+ Persist New State
+```
+
+The agent's identity (`agent_id`) must come from the trusted application context, not from an LLM-generated claim. Tool registration establishes availability to the agent, not permission for every execution context to invoke it.
+
+### Verification
+
+Automated integration tests verify the following behaviors:
+
+1. The hardened path rejects cancellation requests from `customer_agent` with `403 Forbidden`, leaving the order unchanged.
+2. The vulnerable path permits `customer_agent` to cancel an order within the same lab (demonstrating the flaw).
+3. The vulnerable path still enforces lab isolation, returning `404 Not Found` for orders outside the actor's lab.
+4. Regression test: The privileged `orders_agent` can still successfully cancel orders via the standard hardened endpoint (`/api/orders/cancel`).
+
+## 11. Security Control Model
 
 The following controls guide implementation across scenarios. They must be applied where relevant and verified rather than assumed to exist everywhere.
 
@@ -488,7 +568,7 @@ Pass authenticated identity and required authorization context through applicati
 
 Do not implicitly inherit privileges between agents. Any future inter-agent workflow must define its identity, capability, and authorization model explicitly.
 
-## 11. Verification Strategy
+## 12. Verification Strategy
 
 Each implemented scenario should have tests for the vulnerable behavior and the hardened behavior.
 
@@ -506,7 +586,7 @@ For lab-scoped operations, verification should also establish that a user cannot
 
 The vulnerable implementation exists only to demonstrate the security flaw in a controlled environment. It must remain clearly separated from the hardened path and must not be presented as suitable for production use.
 
-## 12. Secure Development Cycle
+## 13. Secure Development Cycle
 
 For each scenario, follow this cycle:
 
@@ -528,7 +608,7 @@ Documentation of Evidence and Limitations
 
 Security tests should remain part of the project test suite so that later changes do not silently reintroduce a fixed vulnerability.
 
-## 13. Scope Boundaries
+## 14. Scope Boundaries
 
 The project prioritizes depth over breadth. Potential future topics include:
 
@@ -544,7 +624,7 @@ The project prioritizes depth over breadth. Potential future topics include:
 
 These topics are not considered implemented merely because they appear in this list. Their inclusion depends on whether a clear threat scenario, controlled demonstration, mitigation, and repeatable tests can be developed.
 
-## 14. Core Security Principle
+## 15. Core Security Principle
 
 ```text
 AI / Agent Layer
@@ -578,11 +658,10 @@ The infrastructure persists the permitted result.
 
 This separation is the fundamental security principle of AgenticEnclave.
 
-## Author
+---
 
-Fernando Magalhães
-
-CEO — FM ByteShift Software
-
-- [FM ByteShift Software](https://fmbyteshiftsoftware.com/)
-- [Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
+**Author**  
+Fernando Magalhães  
+CEO — FM ByteShift Software  
+[FM ByteShift Software](https://fmbyteshiftsoftware.com/)  
+[Cybersecurity Pain Intelligence](https://cybersecuritypainintelligence.com/)
